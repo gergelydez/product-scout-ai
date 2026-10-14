@@ -1,6 +1,7 @@
 # Product Scout AI — MVP
 
 Aplicație Next.js + TypeScript, mobile-first și instalabilă pe Android ca PWA. MVP-ul oferă:
+- **Scanare live (stil X-Scan)**: scrii un cuvânt-cheie și aplicația citește în timp real prima pagină eMAG.ro sau Trendyol RO (până la 60 de produse): preț, preț vechi, rating, număr de recenzii, vânzător, poziție. Arată și prețul mediu, recenziile medii din top 10, dificultatea de intrare și vânzări/venit lunar **estimate din recenzii** (ipotezele se pot ajusta). Dacă scanezi același cuvânt din nou după câteva zile, vezi creșterea reală a recenziilor pentru fiecare produs.
 - 10 idei de produse (ipoteze de cercetare, NU produse validate)
 - linkuri de căutare eMAG, Trendyol, Alibaba
 - filtre și căutare locală
@@ -10,9 +11,8 @@ Aplicație Next.js + TypeScript, mobile-first și instalabilă pe Android ca PWA
 - pagină de metodologie și surse
 
 ## Ce NU face încă
-- Nu scanează automat tot internetul.
-- Nu are integrare API cu eMAG/Trendyol/Alibaba/Minea.
-- Nu raportează afișări, vânzări ori volume de căutare inventate.
+- Nu are acces la vânzările reale: cifrele de vânzări sunt estimări din recenzii.
+- Scanarea citește paginile publice de căutare. Dacă eMAG/Trendyol blochează serverul (captcha/403) sau își schimbă structura paginii, aplicația afișează un mesaj de eroare și linkul către căutare.
 - Nu persistă datele între browsere/dispozitive; favoritele sunt locale.
 
 ## Cerințe
