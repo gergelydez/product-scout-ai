@@ -5,6 +5,7 @@ import { Loader2, Download, Sparkles, AlertTriangle, ScanSearch, ExternalLink } 
 import type { AmazonListResult } from "@/app/api/amazon/route";
 import { CATEGORIES, MARKETS, type ListType, type Market } from "@/lib/amazon/categories";
 import type { AmazonProduct } from "@/lib/amazon/parse";
+import { assessFit } from "@/lib/amazon/fit";
 import { emagCheckFrom, scoreOpportunity, type EmagCheck } from "@/lib/opportunity";
 import { calculate, sale } from "@/lib/importCalc";
 import { useCalcSettings, useFx } from "@/lib/useShared";
@@ -13,7 +14,7 @@ import CopyDiag from "./CopyDiag";
 import type { ScanResult } from "@/lib/scan/types";
 import { alibabaUrl } from "./LiveScan";
 
-type Row = { product: AmazonProduct; keyword: string; check?: EmagCheck; aliUsd?: number; kg?: number };
+type Row = { product: AmazonProduct; keyword: string; check?: EmagCheck; aliUsd?: number; kg?: number; category?: string };
 type Saved = { rows: Row[]; fetchedAt: string; engine?: string; url: string; market: Market };
 
 const CACHE_KEY = "scout-amazon-finder";
@@ -39,8 +40,10 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
   const [data, setData] = useState<Saved | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [onlyGood, setOnlyGood] = useState(false);
+  const [onlyFit, setOnlyFit] = useState(true);
+  const [trendMode, setTrendMode] = useState(false);
 
-  const cacheKey = customUrl.trim() ? `url:${customUrl.trim()}` : `${market}|${list}|${category}`;
+  const cacheKey = trendMode ? `trend|${market}` : customUrl.trim() ? `url:${customUrl.trim()}` : `${market}|${list}|${category}`;
 
   useEffect(() => {
     const c = loadCache()[cacheKey];
@@ -51,18 +54,70 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
 
   function persist(next: Saved) { setData(next); saveCache(cacheKey, next); }
 
+  /** Cuvinte-cheie RO doar pentru produsele potrivite (economisim traduceri), în loturi de 50. */
+  async function withKeywords(products: AmazonProduct[], categoryOf?: Map<string, string>): Promise<{ rows: Row[]; engine?: string }> {
+    const fit = products.filter(p => assessFit(p).ok);
+    const kw = new Map<string, string>();
+    let engine: string | undefined;
+    for (let i = 0; i < fit.length; i += 50) {
+      const batch = fit.slice(i, i + 50);
+      setLoading(`Traduc titluri în cuvinte-cheie românești… ${Math.min(i + 50, fit.length)}/${fit.length}`);
+      const k = await (await fetch("/api/keywords", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ titles: batch.map(p => p.title) }) })).json() as { keywords?: string[]; engine?: string };
+      engine = k.engine;
+      batch.forEach((p, j) => { if (k.keywords?.[j]) kw.set(p.asin, k.keywords[j]); });
+    }
+    const rows = products.map(p => ({ product: p, keyword: kw.get(p.asin) || p.title.split(/\s+/).slice(0, 4).join(" ").toLowerCase(), category: categoryOf?.get(p.asin) }));
+    return { rows, engine };
+  }
+
+  const firstFit = (rows: Row[]) => new Set(rows.filter(r => assessFit(r.product).ok).slice(0, 10).map(r => r.product.asin));
+
+  /** Movers & Shakers din toate categoriile: produsele generice cu cea mai mare creștere. */
+  async function discoverTrends() {
+    setTrendMode(true);
+    setError(null);
+    const all = new Map<string, AmazonProduct>();
+    const categoryOf = new Map<string, string>();
+    const failed: string[] = [];
+    const queue = [...CATEGORIES];
+    let done = 0;
+    const worker = async () => {
+      while (queue.length) {
+        const c = queue.shift()!;
+        setLoading(`Citesc Movers & Shakers ${MARKETS[market].label}: ${c.label} (${++done}/${CATEGORIES.length})`);
+        try {
+          const r: AmazonListResult = await (await fetch(`/api/amazon?${new URLSearchParams({ market, list: "movers", category: c.id })}`)).json();
+          if (!r.ok) { failed.push(c.label); continue; }
+          for (const p of r.products) if (!all.has(p.asin)) { all.set(p.asin, p); categoryOf.set(p.asin, c.label); }
+        } catch { failed.push(c.label); }
+      }
+    };
+    try {
+      await Promise.all([worker(), worker()]);
+      const products = [...all.values()]
+        .sort((a, b) => Number(assessFit(b).ok) - Number(assessFit(a).ok) || (b.rankChangePct ?? 0) - (a.rankChangePct ?? 0))
+        .slice(0, 120);
+      if (!products.length) { setError({ msg: `Nu am putut citi nicio categorie (${failed.join(", ")}).` }); return; }
+      const { rows, engine } = await withKeywords(products, categoryOf);
+      const next = { rows, fetchedAt: new Date().toISOString(), engine, url: `Movers & Shakers – toate categoriile${failed.length ? ` (eșuate: ${failed.join(", ")})` : ""}`, market };
+      setData(next); saveCache(`trend|${market}`, next);
+      setSelected(firstFit(rows));
+    } finally { setLoading(""); }
+  }
+
   async function load() {
+    setTrendMode(false);
     setError(null);
     setLoading("Citesc topul Amazon…");
     try {
       const params = new URLSearchParams(customUrl.trim() ? { url: customUrl.trim() } : { market, list, category });
       const r: AmazonListResult = await (await fetch(`/api/amazon?${params}`)).json();
       if (!r.ok) { setError({ msg: r.error ?? "Eroare necunoscută", debug: r.debug, url: r.url }); return; }
-      setLoading(`Traduc ${r.products.length} titluri în cuvinte-cheie românești…`);
-      const k = await (await fetch("/api/keywords", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ titles: r.products.map(p => p.title) }) })).json() as { keywords?: string[]; engine?: string };
-      const rows = r.products.map((p, i) => ({ product: p, keyword: k.keywords?.[i] || p.title.split(/\s+/).slice(0, 4).join(" ").toLowerCase() }));
-      persist({ rows, fetchedAt: r.fetchedAt, engine: k.engine, url: r.url, market: r.market });
-      setSelected(new Set(rows.slice(0, 10).map(x => x.product.asin)));
+      const { rows, engine } = await withKeywords(r.products);
+      const next = { rows, fetchedAt: r.fetchedAt, engine, url: r.url, market: r.market };
+      const key = customUrl.trim() ? `url:${customUrl.trim()}` : `${market}|${list}|${category}`;
+      setData(next); saveCache(key, next);
+      setSelected(firstFit(rows));
     } catch (e) {
       setError({ msg: (e as Error).message });
     } finally { setLoading(""); }
@@ -99,10 +154,14 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
       const valid = r.check?.keyword === r.keyword ? r.check : undefined;
       const calc = fx && r.aliUsd ? calculate({ aliPriceUsd: r.aliUsd, weightKg: r.kg ?? 0.5, salePrice: valid?.medianPrice }, calcSettings, fx.USD) : undefined;
       const atMin = calc && valid?.minPrice ? sale(valid.minPrice, calc.landedLei, calcSettings) : undefined;
-      return { ...r, calc, atMin, opp: scoreOpportunity(r.product, valid, currency, fx, calc?.at?.marginPct) };
+      const fit = assessFit(r.product);
+      const base = scoreOpportunity(r.product, valid, currency, fx, calc?.at?.marginPct);
+      const opp = fit.ok ? base : { ...base, score: Math.round(base.score * 0.4), label: "Mică" as const, reasons: [...fit.flags, ...base.reasons] };
+      return { ...r, calc, atMin, fit, opp };
     })
-    .filter(r => !onlyGood || r.opp.label !== "Mică")
-    .sort((a, b) => b.opp.score - a.opp.score || a.product.rank - b.product.rank), [data, onlyGood, currency, fx, calcSettings]);
+    .filter(r => (!onlyFit || r.fit.ok) && (!onlyGood || r.opp.label !== "Mică"))
+    .sort((a, b) => b.opp.score - a.opp.score || a.product.rank - b.product.rank), [data, onlyGood, onlyFit, currency, fx, calcSettings]);
+  const hiddenUnfit = (data?.rows ?? []).filter(r => !assessFit(r.product).ok).length;
 
   const validatedCount = data?.rows.filter(r => r.check?.ok).length ?? 0;
 
@@ -132,9 +191,13 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
       <p>Ia produsele care se vând deja bine pe Amazon UK/DE (Best Sellers sau Movers & Shakers), le transformă în cuvinte-cheie românești și verifică automat cât de aglomerat e eMAG. Scorul combină cererea dovedită pe Amazon cu concurența și prețurile de pe eMAG.</p>
       <div className="finderform">
         <div className="field"><label>Piață</label><select value={market} onChange={e => setMarket(e.target.value as Market)}><option value="uk">Amazon UK</option><option value="de">Amazon DE</option></select></div>
-        <div className="field"><label>Listă</label><select value={list} onChange={e => setList(e.target.value as ListType)}><option value="movers">Movers & Shakers (în creștere 24h)</option><option value="bestsellers">Best Sellers</option></select></div>
-        <div className="field"><label>Categorie</label><select value={category} onChange={e => setCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
+        <div className="field"><label>Listă</label><select value={list} onChange={e => { setTrendMode(false); setList(e.target.value as ListType); }}><option value="movers">Movers & Shakers (în creștere 24h)</option><option value="new">Noutăți (New Releases)</option><option value="wished">Cele mai dorite (Most Wished For)</option><option value="bestsellers">Best Sellers</option></select></div>
+        <div className="field"><label>Categorie</label><select value={category} onChange={e => { setTrendMode(false); setCategory(e.target.value); }}>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></div>
         <button className="primary" onClick={load} disabled={!!loading}>{loading.startsWith("Citesc") || loading.startsWith("Traduc") ? <Loader2 size={16} className="spin" /> : <ScanSearch size={16} />} Încarcă topul</button>
+      </div>
+      <div className="trendcta">
+        <button className="trendbtn" onClick={discoverTrends} disabled={!!loading}><Sparkles size={16} /> Descoperă trenduri: Movers & Shakers din toate categoriile ({MARKETS[market].label})</button>
+        <span className="footnote">≈ {CATEGORIES.length}–{CATEGORIES.length * 4} cereri ScraperAPI · păstrează doar produse generice, fără mărci mari, baterii sau accesorii pentru un model anume.</span>
       </div>
       <details className="footnote" style={{ marginTop: 10 }}><summary>Sau lipește un link Amazon (orice subcategorie Best Sellers / Movers & Shakers)</summary>
         <input className="urlinput" value={customUrl} onChange={e => setCustomUrl(e.target.value)} placeholder="https://www.amazon.co.uk/gp/movers-and-shakers/kitchen/…" />
@@ -152,6 +215,7 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
       <div className="scantools">
         <button className="primary" onClick={validate} disabled={!!loading || selected.size === 0}>Verifică pe eMAG ({selected.size} selectate)</button>
         <span className="footnote">≈ {selected.size}–{selected.size * 3} cereri ScraperAPI</span>
+        <div className="seg"><button className={onlyFit ? "active" : ""} onClick={() => setOnlyFit(true)}>Potrivite marcă proprie</button><button className={!onlyFit ? "active" : ""} onClick={() => setOnlyFit(false)}>Toate ({hiddenUnfit} nepotrivite)</button></div>
         <div className="seg"><button className={!onlyGood ? "active" : ""} onClick={() => setOnlyGood(false)}>Toate</button><button className={onlyGood ? "active" : ""} onClick={() => setOnlyGood(true)}>Doar Mare/Medie</button></div>
         <div className="actions" style={{ marginTop: 0, marginLeft: "auto" }}>
           <button className="secondary" onClick={() => setSelected(new Set(data.rows.filter(r => !r.check?.ok).slice(0, 10).map(r => r.product.asin)))}>Selectează următoarele 10</button>
@@ -164,13 +228,13 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
           <th></th><th>Scor</th><th>#</th><th className="sticky">Produs Amazon</th><th>Preț</th><th>Rating</th><th>Recenzii</th><th>Creștere</th>
           <th>Cuvânt-cheie eMAG</th><th>Rezultate eMAG</th><th>Rec. medii top 10</th><th>Preț median eMAG</th><th>Unități/lună top 10*</th><th className="costcol">Alibaba $/buc</th><th className="costcol">kg/buc</th><th>Cost marfă</th><th>Preț minim eMAG</th><th>Profit la median</th><th>Profit la cel mai mic preț</th><th>De ce</th><th></th>
         </tr></thead>
-        <tbody>{scored.map(({ product: p, keyword, check, opp, aliUsd, kg, calc, atMin }) => {
+        <tbody>{scored.map(({ product: p, keyword, check, opp, aliUsd, kg, calc, atMin, category }) => {
           const valid = check?.keyword === keyword ? check : undefined;
           return <tr key={p.asin}>
             <td><input type="checkbox" checked={selected.has(p.asin)} onChange={() => toggle(p.asin)} aria-label="Selectează" /></td>
             <td><span className={`oppscore ${opp.label.toLowerCase()}`} title={`Cerere ${Math.round(opp.demand * 100)} · Concurență ${Math.round(opp.competition * 100)}`}>{valid?.ok ? opp.score : "?"}</span></td>
             <td>{p.rank}</td>
-            <td className="sticky"><div className="cellprod">{p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="scanimg" />}<a href={p.url} target="_blank" rel="noreferrer" title={p.title}>{p.title}</a></div></td>
+            <td className="sticky"><div className="cellprod">{p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="scanimg" />}<div style={{ minWidth: 0 }}><a href={p.url} target="_blank" rel="noreferrer" title={p.title}>{p.title}</a>{category && <div className="catlabel">{category}</div>}</div></div></td>
             <td className="num">{p.price !== undefined ? <>{currency === "GBP" ? "£" : "€"}{fmt(p.price, 2)}{fx && <s style={{ textDecoration: "none" }}>≈ {lei(p.price * fx[currency])}</s>}</> : "–"}</td>
             <td className="num">{p.rating ? <><span className="star">★</span> {fmt(p.rating, 1)}</> : "–"}</td>
             <td className="num">{fmt(p.reviews)}</td>

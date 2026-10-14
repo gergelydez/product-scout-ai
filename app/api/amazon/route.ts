@@ -22,7 +22,8 @@ export type AmazonListResult = {
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   let market: Market = sp.get("market") === "de" ? "de" : "uk";
-  const list: ListType = sp.get("list") === "movers" ? "movers" : "bestsellers";
+  const rawList = sp.get("list");
+  const list: ListType = rawList === "movers" || rawList === "new" || rawList === "wished" ? rawList : "bestsellers";
   const page = sp.get("page") === "2" ? 2 : 1;
   let url: string;
   const custom = sp.get("url");

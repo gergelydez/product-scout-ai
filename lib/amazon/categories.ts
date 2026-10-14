@@ -1,5 +1,12 @@
 export type Market = "uk" | "de";
-export type ListType = "bestsellers" | "movers";
+export type ListType = "bestsellers" | "movers" | "new" | "wished";
+
+const LIST_PATH: Record<ListType, string> = {
+  bestsellers: "gp/bestsellers",
+  movers: "gp/movers-and-shakers",
+  new: "gp/new-releases",
+  wished: "gp/most-wished-for",
+};
 
 export const MARKETS: Record<Market, { label: string; host: string; currency: "GBP" | "EUR"; lang: string }> = {
   uk: { label: "Amazon UK", host: "https://www.amazon.co.uk", currency: "GBP", lang: "en-GB,en;q=0.9" },
@@ -26,7 +33,7 @@ export const CATEGORIES: { id: string; label: string; uk: string; de: string }[]
 export function listUrl(market: Market, list: ListType, categoryId: string, page = 1): string {
   const cat = CATEGORIES.find(c => c.id === categoryId);
   const slug = cat ? cat[market] : categoryId;
-  const path = list === "movers" ? "gp/movers-and-shakers" : "gp/bestsellers";
+  const path = LIST_PATH[list];
   return `${MARKETS[market].host}/${path}/${slug}${page > 1 ? `?pg=${page}` : ""}`;
 }
 
