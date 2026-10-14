@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { CATEGORIES, listUrl, MARKETS, safeAmazonUrl, type ListType, type Market } from "@/lib/amazon/categories";
-import { parseAmazonList, type AmazonProduct } from "@/lib/amazon/parse";
+import { amazonPageSummary, parseAmazonList, type AmazonProduct } from "@/lib/amazon/parse";
 import { fetchAttempts, pageTitle } from "@/lib/fetchPage";
 import { looksBlocked } from "@/lib/scan/extract";
 
 export const dynamic = "force-dynamic";
 export const preferredRegion = ["fra1"];
-export const maxDuration = 60;
+export const maxDuration = 150;
 
 export type AmazonListResult = {
   ok: boolean;
@@ -44,7 +44,9 @@ export async function GET(req: Request) {
       result.debug.push(`${via}: HTTP ${p.status}, ${Math.round(p.html.length / 1024)} KB, titlu „${pageTitle(p.html)}”`);
       const products = p.status < 400 ? parseAmazonList(p.html, MARKETS[market].host) : [];
       if (products.length) return NextResponse.json({ ...result, ok: true, products, via });
-      lastError = looksBlocked(p.status, p.html) ?? "Pagina s-a încărcat, dar nu am găsit produse (categorie greșită sau structură schimbată).";
+      if (p.status < 400) result.debug.push(...amazonPageSummary(p.html).map(l => `  ${via} › ${l}`));
+      lastError = /validateCaptcha|captchacharacters/i.test(p.html) ? "Amazon a cerut captcha (robot check)."
+        : looksBlocked(p.status, p.html) ?? "Pagina s-a încărcat, dar nu am găsit produse (categorie greșită sau structură schimbată).";
     } catch (e) {
       lastError = (e as Error).message;
       result.debug.push(`${via}: eroare rețea (${lastError})`);

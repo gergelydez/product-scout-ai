@@ -5,7 +5,7 @@ import type { Source } from "@/lib/scan/types";
 export const dynamic = "force-dynamic";
 // Rulează funcția aproape de România (Frankfurt) pe Vercel.
 export const preferredRegion = ["fra1"];
-export const maxDuration = 30;
+export const maxDuration = 150;
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

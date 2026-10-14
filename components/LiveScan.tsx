@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Loader2, ExternalLink, Download, Calculator, TrendingUp, AlertTriangle, SlidersHorizontal } from "lucide-react";
 import type { ScanResult, ScannedProduct, Source } from "@/lib/scan/types";
+import CopyDiag from "./CopyDiag";
 import { DEFAULT_SETTINGS, estimateMonthlySales, recordAndCompare, summarize, type EstimateSettings, type Trend } from "@/lib/scan/metrics";
 
 const lei = (n?: number) => n === undefined ? "–" : new Intl.NumberFormat("ro-RO", { style: "currency", currency: "RON", maximumFractionDigits: 0 }).format(n);
@@ -92,7 +93,7 @@ export default function LiveScan({ initialQuery, trigger, onCalc }: { initialQue
       <p className="footnote" style={{ margin: "10px 0 0" }}>Citește în timp real prima pagină de rezultate (până la 60 de produse). Unitățile și venitul lunar sunt <b>estimări</b>, nu vânzări reale.</p>
     </div>
 
-    {result && !result.ok && <div className="panel scanerror"><AlertTriangle size={18} /><div><strong>Scanarea nu a reușit.</strong><p>{result.error}</p>{result.needsProxy && <p className="footnote">Pași: creează cont gratuit pe scraperapi.com → copiază „API Key” → în Vercel: Project → Settings → Environment Variables → nume <b>SCRAPERAPI_KEY</b>, valoare cheia → Save → Deployments → Redeploy.{result.source === "emag" && " Între timp poți încerca Trendyol RO din meniul de lângă căutare."}</p>}{!!result.debug?.length && <details className="footnote" style={{ marginBottom: 10 }}><summary>Detalii tehnice</summary>{result.debug.map((d, i) => <div key={i}>{d}</div>)}</details>}{result.searchUrl && <a className="secondary" href={result.searchUrl} target="_blank" rel="noreferrer">Deschide căutarea pe site <ExternalLink size={12} /></a>}</div></div>}
+    {result && !result.ok && <div className="panel scanerror"><AlertTriangle size={18} /><div><strong>Scanarea nu a reușit.</strong><p>{result.error}</p>{result.needsProxy && <p className="footnote">Pași: creează cont gratuit pe scraperapi.com → copiază „API Key” → în Vercel: Project → Settings → Environment Variables → nume <b>SCRAPERAPI_KEY</b>, valoare cheia → Save → Deployments → Redeploy.{result.source === "emag" && " Între timp poți încerca Trendyol RO din meniul de lângă căutare."}</p>}{!!result.debug?.length && <CopyDiag lines={[`URL: ${result.searchUrl}`, result.error ?? "", ...result.debug]} />}{result.searchUrl && <a className="secondary" href={result.searchUrl} target="_blank" rel="noreferrer">Deschide căutarea pe site <ExternalLink size={12} /></a>}</div></div>}
 
     {result?.ok && <>
       <div className="sectionhead" style={{ marginTop: 18 }}>

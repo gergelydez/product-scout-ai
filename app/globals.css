@@ -66,3 +66,5 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1180px;mar
 .scantable th.costcol,.scantable td.costcol{background:#fbfaf3}
 .findertable{min-width:2100px}
 @media(max-width:720px){.calcgrid,.calckpis,.calcsettings{grid-template-columns:1fr 1fr}}
+img.logo{width:44px;height:44px;border-radius:13px;background:none;box-shadow:0 6px 18px #4f46e540}
+.installbtn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:99px;padding:9px 14px;font-size:12px;font-weight:800;color:#fff;background:linear-gradient(120deg,#4F46E5,#7C3AED,#C026D3);box-shadow:0 6px 18px #7c3aed40;white-space:nowrap}

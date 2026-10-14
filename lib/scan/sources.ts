@@ -83,6 +83,10 @@ export async function scan(source: Source, q: string): Promise<ScanResult> {
     // Încercăm întâi extragerea: paginile normale pot conține cuvântul „recaptcha” fără să fie blocate.
     const { products, method, samples } = p.status < 400 ? extractProducts(source, p.html) : { products: [], method: undefined, samples: [] };
     if (products.length) return { ...base, ok: true, products: products.slice(0, 60), totalResults: totalResults(p.html), method, via, samples };
+    if (p.status < 400) {
+      const text = p.html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      base.debug!.push(`  ${via} › scripturi: ${(p.html.match(/<script/gi) ?? []).length}, JSON găsite: ${(samples ?? []).filter(x => x.startsWith("JSON")).length}, text: ${text.slice(0, 500)}`);
+    }
     lastError = looksBlocked(p.status, p.html)
       ?? "Pagina s-a încărcat, dar nu am găsit produse în ea (structura site-ului s-a schimbat sau căutarea nu are rezultate).";
   }

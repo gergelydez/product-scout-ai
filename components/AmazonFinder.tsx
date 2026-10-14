@@ -9,6 +9,7 @@ import { emagCheckFrom, scoreOpportunity, type EmagCheck } from "@/lib/opportuni
 import { calculate, sale } from "@/lib/importCalc";
 import { useCalcSettings, useFx } from "@/lib/useShared";
 import { FxBadge, type CalcPreset } from "./ImportCalculator";
+import CopyDiag from "./CopyDiag";
 import type { ScanResult } from "@/lib/scan/types";
 import { alibabaUrl } from "./LiveScan";
 
@@ -142,7 +143,7 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
 
     {loading && <div className="panel progress"><Loader2 size={16} className="spin" /> {loading}</div>}
 
-    {error && <div className="panel scanerror"><AlertTriangle size={18} /><div><strong>Nu am putut încărca lista.</strong><p>{error.msg}</p>{error.debug && <details className="footnote"><summary>Detalii tehnice</summary>{error.debug.map((d, i) => <div key={i}>{d}</div>)}</details>}{error.url && <a className="secondary" href={error.url} target="_blank" rel="noreferrer">Deschide pagina Amazon <ExternalLink size={12} /></a>}</div></div>}
+    {error && <div className="panel scanerror"><AlertTriangle size={18} /><div><strong>Nu am putut încărca lista.</strong><p>{error.msg}</p>{error.debug && <CopyDiag lines={[`URL: ${error.url ?? ""}`, error.msg, ...error.debug]} />}{error.url && <a className="secondary" href={error.url} target="_blank" rel="noreferrer">Deschide pagina Amazon <ExternalLink size={12} /></a>}</div></div>}
 
     {data && <>
       <div className="sectionhead" style={{ marginTop: 18 }}>
