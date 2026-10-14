@@ -44,7 +44,9 @@ export async function GET(req: Request) {
       const p = await attempt();
       result.debug.push(`${via}: HTTP ${p.status}, ${Math.round(p.html.length / 1024)} KB, titlu „${pageTitle(p.html)}”`);
       const products = p.status < 400 ? parseAmazonList(p.html, MARKETS[market].host) : [];
-      if (products.length) return NextResponse.json({ ...result, ok: true, products, via });
+      // Un top Amazon are 30–50 de produse; sub 5 înseamnă pagină de eroare/blocare cu linkuri din meniu.
+      if (products.length >= 5) return NextResponse.json({ ...result, ok: true, products, via });
+      if (products.length) result.debug.push(`  ${via} › doar ${products.length} produse găsite (${products.map(x => x.title.slice(0, 30)).join("; ")}) – probabil pagină de eroare, încerc mai departe`);
       if (p.status < 400) result.debug.push(...amazonPageSummary(p.html).map(l => `  ${via} › ${l}`));
       lastError = /validateCaptcha|captchacharacters/i.test(p.html) ? "Amazon a cerut captcha (robot check)."
         : looksBlocked(p.status, p.html) ?? "Pagina s-a încărcat, dar nu am găsit produse (categorie greșită sau structură schimbată).";

@@ -19,8 +19,24 @@ export function parseBnrXml(xml: string): FxRates | undefined {
   return { USD, EUR, GBP, date, source: "BNR" };
 }
 
+const BNR_URLS = ["https://www.bnr.ro/nbrfxrates.xml", "https://bnr.ro/nbrfxrates.xml", "https://curs.bnr.ro/nbrfxrates.xml"];
+
 async function fromBnr(): Promise<FxRates | undefined> {
-  const res = await fetch("https://www.bnr.ro/nbrfxrates.xml", { next: { revalidate: 1800 }, signal: AbortSignal.timeout(8000) });
+  for (const url of BNR_URLS) {
+    try {
+      const res = await fetch(url, {
+        next: { revalidate: 1800 },
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; ProductScout/1.0)", Accept: "application/xml,text/xml,*/*" },
+        signal: AbortSignal.timeout(10000),
+      });
+      const r = res.ok ? parseBnrXml(await res.text()) : undefined;
+      if (r) return r;
+    } catch {}
+  }
+  // Ultima variantă: același XML BNR prin ScraperAPI (dacă serverele BNR refuză IP-urile Vercel).
+  const key = process.env.SCRAPERAPI_KEY?.trim();
+  if (!key) return undefined;
+  const res = await fetch(`https://api.scraperapi.com/?api_key=${encodeURIComponent(key)}&url=${encodeURIComponent(BNR_URLS[0])}`, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(30000) });
   return res.ok ? parseBnrXml(await res.text()) : undefined;
 }
 

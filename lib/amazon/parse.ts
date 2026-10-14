@@ -32,6 +32,8 @@ function spacedText(card: cheerio.Cheerio<any>): string {
     .filter(n => n.type === "text").map(n => (n as unknown as { data: string }).data).join(" ").replace(/\s+/g, " ");
 }
 
+const JUNK_TITLE = /^(prime video|amazon (barclaycard|music|business|pay|photos|prime)|audible|kindle unlimited|the amazon barclaycard|alexa skills|amazon (gift|geschenk))/i;
+
 /** Ultimul număr întreg dintr-un text („4,6 von 5 Sternen 12.345” → 12345). */
 function lastCount(text: string): number | undefined {
   const all = text.replace(/\d[.,]\d\s*(?:out of|von|de)\s*5[^\d]*/gi, " ").match(/\d{1,3}(?:[.,]\d{3})+|\d+/g);
@@ -105,6 +107,8 @@ function parseByProductLinks($: cheerio.CheerioAPI, host: string, meta: Map<stri
   const seen = new Set<string>();
   $('a[href*="/dp/"], a[href*="/gp/product/"]').each((_, el) => {
     const link = $(el);
+    // Ignorăm meniul, subsolul și bannerele (Prime Video, Barclaycard, Audible…)
+    if (link.closest('header, footer, nav, #navbar, #nav-main, #navFooter, #nav-belt, [id^="nav-"], [class*="nav-"], [role="navigation"]').length) return;
     const asin = (link.attr("href") || "").match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/)?.[1];
     if (!asin || seen.has(asin)) return;
     let card = link;
@@ -119,9 +123,11 @@ function parseByProductLinks($: cheerio.CheerioAPI, host: string, meta: Map<stri
     const title = (card.find('[class*="line-clamp"], [class*="truncate"]').first().text().trim()
       || card.find('a[href*="/dp/"]').toArray().map(a => $(a).text().trim()).sort((x, y) => y.length - x.length)[0]
       || img.attr("alt") || "").replace(/\s+/g, " ");
-    if (title.length < 8) return;
-    seen.add(asin);
+    if (title.length < 8 || JUNK_TITLE.test(title)) return;
     const text = spacedText(card);
+    // Un produs real din top are măcar preț sau rating.
+    if (!PRICE_RE.test(text) && !/\d[.,]\d\s*(?:out of|von|de)\s*5/.test(text)) return;
+    seen.add(asin);
     const m = meta.get(asin);
     out.push({
       rank: num(text.match(/#\s?(\d{1,3})\b/)?.[1]) ?? m?.rank ?? out.length + 1,

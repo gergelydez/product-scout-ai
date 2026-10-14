@@ -42,6 +42,7 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
   const [onlyGood, setOnlyGood] = useState(false);
   const [onlyFit, setOnlyFit] = useState(true);
   const [trendMode, setTrendMode] = useState(false);
+  const [sweepIssues, setSweepIssues] = useState<{ failed: string[]; debug: string[] } | null>(null);
 
   const cacheKey = trendMode ? `trend|${market}` : customUrl.trim() ? `url:${customUrl.trim()}` : `${market}|${list}|${category}`;
 
@@ -79,6 +80,8 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
     const all = new Map<string, AmazonProduct>();
     const categoryOf = new Map<string, string>();
     const failed: string[] = [];
+    const debug: string[] = [];
+    setSweepIssues(null);
     const queue = [...CATEGORIES];
     let done = 0;
     const worker = async () => {
@@ -87,17 +90,18 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
         setLoading(`Citesc Movers & Shakers ${MARKETS[market].label}: ${c.label} (${++done}/${CATEGORIES.length})`);
         try {
           const r: AmazonListResult = await (await fetch(`/api/amazon?${new URLSearchParams({ market, list: "movers", category: c.id })}`)).json();
-          if (!r.ok) { failed.push(c.label); continue; }
+          if (!r.ok) { failed.push(c.label); debug.push(`[${c.label}] ${r.url}`, `  ${r.error ?? ""}`, ...r.debug); continue; }
           for (const p of r.products) if (!all.has(p.asin)) { all.set(p.asin, p); categoryOf.set(p.asin, c.label); }
-        } catch { failed.push(c.label); }
+        } catch (e) { failed.push(c.label); debug.push(`[${c.label}] ${(e as Error).message}`); }
       }
     };
     try {
       await Promise.all([worker(), worker()]);
+      if (failed.length) setSweepIssues({ failed, debug });
       const products = [...all.values()]
         .sort((a, b) => Number(assessFit(b).ok) - Number(assessFit(a).ok) || (b.rankChangePct ?? 0) - (a.rankChangePct ?? 0))
         .slice(0, 120);
-      if (!products.length) { setError({ msg: `Nu am putut citi nicio categorie (${failed.join(", ")}).` }); return; }
+      if (!products.length) { setError({ msg: `Nu am putut citi nicio categorie (${failed.join(", ")}).`, debug }); return; }
       const { rows, engine } = await withKeywords(products, categoryOf);
       const next = { rows, fetchedAt: new Date().toISOString(), engine, url: `Movers & Shakers – toate categoriile${failed.length ? ` (eșuate: ${failed.join(", ")})` : ""}`, market };
       setData(next); saveCache(`trend|${market}`, next);
@@ -207,6 +211,8 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
     {loading && <div className="panel progress"><Loader2 size={16} className="spin" /> {loading}</div>}
 
     {error && <div className="panel scanerror"><AlertTriangle size={18} /><div><strong>Nu am putut încărca lista.</strong><p>{error.msg}</p>{error.debug && <CopyDiag lines={[`URL: ${error.url ?? ""}`, error.msg, ...error.debug]} />}{error.url && <a className="secondary" href={error.url} target="_blank" rel="noreferrer">Deschide pagina Amazon <ExternalLink size={12} /></a>}</div></div>}
+
+    {sweepIssues && trendMode && data && <div className="panel scanerror"><AlertTriangle size={18} /><div><strong>{sweepIssues.failed.length} din {CATEGORIES.length} categorii nu s-au putut citi</strong><p>{sweepIssues.failed.join(", ")}. Restul rezultatelor sunt mai jos.</p><CopyDiag lines={sweepIssues.debug} /></div></div>}
 
     {data && <>
       <div className="sectionhead" style={{ marginTop: 18 }}>
