@@ -172,6 +172,24 @@ function pickSeller(o: Obj): string | undefined {
   return undefined;
 }
 
+function pickBrand(o: Obj): string | undefined {
+  const node = deepFind(o, /^(brand|brandName|brand_name|manufacturer)$/i, v => typeof v === "string" || isObj(v), 2);
+  if (typeof node === "string") return node.trim() || undefined;
+  if (isObj(node)) return firstString(node, ["name", "display", "title"]);
+  return undefined;
+}
+
+function pickFbe(o: Obj): boolean | undefined {
+  const v = deepFind(o, /fbe|fulfil|fulfilment|fulfillment|logistic/i, v => typeof v === "boolean" || typeof v === "string", 3);
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") return /fbe|emag/i.test(v) ? true : /fbm|seller|vendor/i.test(v) ? false : undefined;
+  return undefined;
+}
+
+export function pnkFromUrl(url?: string): string | undefined {
+  return url?.match(/\/pd\/([A-Z0-9]{6,})/i)?.[1]?.toUpperCase();
+}
+
 export function normalizeProducts(items: Obj[], base: string, imageBase = base): ScannedProduct[] {
   return items.map((o, i) => ({
     position: i + 1,
@@ -184,6 +202,9 @@ export function normalizeProducts(items: Obj[], base: string, imageBase = base):
     rating: pickRating(o),
     reviews: pickReviews(o),
     seller: pickSeller(o),
+    brand: pickBrand(o),
+    pnk: (typeof o.part_number_key === "string" ? o.part_number_key : undefined) ?? pnkFromUrl(pickUrl(o, base)),
+    fbe: pickFbe(o),
   })).filter(p => p.title);
 }
 

@@ -11,6 +11,11 @@ export type ScannedProduct = {
   rating?: number;
   reviews?: number;
   seller?: string;
+  brand?: string;
+  /** Cod produs eMAG (PNK), ex. DC2VHGYBM */
+  pnk?: string;
+  /** true = livrat de eMAG (FBE), false = livrat de vânzător (FBM) */
+  fbe?: boolean;
 };
 
 export type ScanResult = {
@@ -20,6 +25,8 @@ export type ScanResult = {
   searchUrl: string;
   fetchedAt: string;
   products: ScannedProduct[];
+  /** Numărul total de rezultate raportat de site */
+  totalResults?: number;
   /** Cum au fost extrase datele: JSON din pagină sau HTML */
   method?: "json" | "html";
   error?: string;

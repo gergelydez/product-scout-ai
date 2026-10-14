@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { looksBlocked, parseNumber, productListsFromEmbeddedJson } from "./extract";
+import { looksBlocked, parseNumber, pnkFromUrl, productListsFromEmbeddedJson } from "./extract";
 import { fillFromNearbyHtml, htmlAroundFirstProduct, mergeLists } from "./merge";
 import type { ScannedProduct, ScanResult, Source } from "./types";
 
@@ -78,12 +78,19 @@ function pageTitle(html: string): string {
   return (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
+/** „4.128 rezultate pentru …” */
+export function totalResults(html: string): number | undefined {
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  const m = text.match(/(\d{1,3}(?:\.\d{3})*|\d+)\s+(?:de\s+)?(?:rezultate|produse)\s+pentru/i);
+  return m ? Number(m[1].replace(/\./g, "")) : undefined;
+}
+
 function extractProducts(source: Source, html: string): { products: ScannedProduct[]; method: ScanResult["method"]; samples: string[] } {
   const siteBase = source === "emag" ? "https://www.emag.ro" : "https://www.trendyol.com/ro";
   const jsonLists = productListsFromEmbeddedJson(html, siteBase, source === "trendyol" ? "https://cdn.dsmcdn.com" : siteBase);
   const htmlList = source === "emag" ? parseEmagHtml(html) : [];
   const merged = mergeLists([...jsonLists.map(l => l.products), htmlList]);
-  const products = fillFromNearbyHtml(html, merged);
+  const products = fillFromNearbyHtml(html, merged).map(p => ({ ...p, pnk: p.pnk ?? pnkFromUrl(p.url) }));
   const method: ScanResult["method"] = htmlList.length >= merged.length && htmlList.length ? "html" : "json";
   const samples = [
     ...jsonLists.map((l, i) => `JSON listă ${i + 1} (${l.products.length} produse): ${l.sample}`),
@@ -111,7 +118,7 @@ export async function scan(source: Source, q: string): Promise<ScanResult> {
     base.debug!.push(`${via}: HTTP ${p.status}, ${Math.round(p.html.length / 1024)} KB, titlu „${pageTitle(p.html)}”`);
     // Încercăm întâi extragerea: paginile normale pot conține cuvântul „recaptcha” fără să fie blocate.
     const { products, method, samples } = p.status < 400 ? extractProducts(source, p.html) : { products: [], method: undefined, samples: [] };
-    if (products.length) return { ...base, ok: true, products: products.slice(0, 60), method, via, samples };
+    if (products.length) return { ...base, ok: true, products: products.slice(0, 60), totalResults: totalResults(p.html), method, via, samples };
     lastError = looksBlocked(p.status, p.html)
       ?? "Pagina s-a încărcat, dar nu am găsit produse în ea (structura site-ului s-a schimbat sau căutarea nu are rezultate).";
   }

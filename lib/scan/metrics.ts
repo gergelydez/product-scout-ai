@@ -1,19 +1,34 @@
 import type { ScannedProduct } from "./types";
 
+export type EstimateModel = "pozitie" | "recenzii";
+
 export type EstimateSettings = {
+  model: EstimateModel;
+  /** Multiplicator pentru modelul pe poziție (1 = calibrarea implicită) */
+  demandFactor: number;
   /** Câți cumpărători din 100 lasă o recenzie (%) */
   reviewRatePct: number;
   /** Vechimea medie presupusă a unui listing (luni) */
   listingAgeMonths: number;
 };
 
-export const DEFAULT_SETTINGS: EstimateSettings = { reviewRatePct: 2, listingAgeMonths: 12 };
+export const DEFAULT_SETTINGS: EstimateSettings = { model: "pozitie", demandFactor: 1, reviewRatePct: 2, listingAgeMonths: 12 };
 
 /**
- * Estimare grosieră: recenzii ÷ rata de recenzie = vânzări totale; împărțit la vechime = vânzări/lună.
- * Nu sunt date reale de vânzări; utilizatorul poate ajusta ipotezele.
+ * Model „poziție + recenzii”: unități/lună ≈ 47,8 × poziție^-0,308 × (recenzii+1)^0,166.
+ * Coeficienții au fost potriviți (regresie log-log) pe estimările X-Scan pentru
+ * „videoproiector” (27 de produse, eroare medie ~20%). Cererea diferă între nișe,
+ * de aceea există multiplicatorul `demandFactor`.
+ *
+ * Model „recenzii”: recenzii ÷ rata de recenzie ÷ vechimea listingului.
+ *
+ * Ambele sunt estimări, nu vânzări reale.
  */
 export function estimateMonthlySales(p: ScannedProduct, s: EstimateSettings): number | undefined {
+  if (s.model === "pozitie") {
+    const units = 47.8 * Math.pow(Math.max(p.position, 1), -0.308) * Math.pow((p.reviews ?? 0) + 1, 0.166);
+    return Math.max(1, Math.round(units * s.demandFactor));
+  }
   if (p.reviews === undefined) return undefined;
   const total = p.reviews / Math.max(s.reviewRatePct / 100, 0.001);
   return Math.round(total / Math.max(s.listingAgeMonths, 1));
@@ -36,6 +51,10 @@ export type Summary = {
   avgReviewsTop10?: number;
   avgRating?: number;
   lowReviewSharePct?: number;
+  fbeCount?: number;
+  avgTitleLength?: number;
+  top10MedianReviews?: number;
+  top10MedianRevenue?: number;
   estMonthlyUnits?: number;
   estMonthlyRevenue?: number;
   difficulty: "Scăzută" | "Medie" | "Ridicată" | "Necunoscută";
@@ -53,6 +72,11 @@ export function summarize(products: ScannedProduct[], s: EstimateSettings): Summ
     any = true; units += u; revenue += u * (p.price ?? 0);
   }
   const avgTop10 = avg(top10);
+  const top10Revenue = products.slice(0, 10).map(p => {
+    const u = estimateMonthlySales(p, s);
+    return u !== undefined && p.price !== undefined ? u * p.price : undefined;
+  }).filter((x): x is number => x !== undefined);
+  const fbeKnown = products.filter(p => p.fbe !== undefined);
   const difficulty = avgTop10 === undefined ? "Necunoscută" : avgTop10 < 50 ? "Scăzută" : avgTop10 < 300 ? "Medie" : "Ridicată";
   return {
     count: products.length,
@@ -61,6 +85,10 @@ export function summarize(products: ScannedProduct[], s: EstimateSettings): Summ
     maxPrice: prices.length ? Math.max(...prices) : undefined,
     avgReviews: avg(reviews), avgReviewsTop10: avgTop10, avgRating: avg(ratings),
     lowReviewSharePct: reviews.length ? (reviews.filter(r => r < 20).length / reviews.length) * 100 : undefined,
+    fbeCount: fbeKnown.length ? fbeKnown.filter(p => p.fbe).length : undefined,
+    avgTitleLength: avg(products.map(p => p.title.length)),
+    top10MedianReviews: median(top10),
+    top10MedianRevenue: median(top10Revenue),
     estMonthlyUnits: any ? units : undefined,
     estMonthlyRevenue: any ? revenue : undefined,
     difficulty,

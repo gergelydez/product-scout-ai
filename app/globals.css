@@ -15,3 +15,29 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1180px;mar
 .trend{display:inline-flex;align-items:center;gap:3px;margin-left:8px;color:var(--green);font-weight:700}
 .scancalc{flex-shrink:0}
 @media(max-width:720px){.scaninput{flex-wrap:wrap}.scaninput input{flex-basis:100%}.scaninput .primary{flex:1}.metrics:has(.metric:nth-child(6)){grid-template-columns:repeat(2,minmax(0,1fr))}.scanstats{grid-template-columns:repeat(3,minmax(0,1fr))}.scanrow img,.scanimg{width:56px;height:56px}.sectionhead{flex-wrap:wrap}}
+.scanmetrics{grid-template-columns:repeat(4,minmax(0,1fr))!important;margin-top:8px}
+.scanmetrics .metric strong{font-size:21px}
+.scantools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.seg button{border:0;background:transparent;padding:8px 12px;font-size:12px;font-weight:700;color:#5c6378}
+.seg button.active{background:#6157e8;color:#fff}
+.scantablewrap{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:15px;-webkit-overflow-scrolling:touch}
+.scantable{border-collapse:separate;border-spacing:0;width:100%;min-width:1180px;font-size:12px}
+.scantable th{position:sticky;top:0;background:#f8f9fc;color:#454c63;font-weight:800;text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11px}
+.scantable td{padding:8px;border-bottom:1px solid #f0f1f6;vertical-align:middle;white-space:nowrap}
+.scantable tr:hover td{background:#fafaff}
+.scantable .sticky{position:sticky;left:0;background:#fff;z-index:1;box-shadow:1px 0 0 var(--line)}
+.scantable th.sticky{background:#f8f9fc;z-index:2}
+.scantable .num{text-align:right}.scantable .num s{display:block;font-size:10px;color:var(--muted)}
+.cellprod{display:flex;align-items:center;gap:8px;width:250px}
+.cellprod img,.cellprod .scanimg{width:34px;height:34px;object-fit:contain;border-radius:6px;background:#f4f5fa;flex-shrink:0}
+.cellprod a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);text-decoration:none;font-weight:600}
+.scantable a{color:#5147d5}
+.thsort{border:0;background:none;font:inherit;font-weight:800;color:inherit;padding:0;white-space:nowrap}
+.badge{display:inline-block;border-radius:6px;padding:3px 7px;font-size:10px;font-weight:800;color:#fff}
+.badge.fbe{background:#7b1f6b}.badge.fbm{background:#1e9bd7}
+.star{color:#f5a524}
+.scantable .trend{display:block;margin:0;font-size:10px}
+.calcbtn{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:7px;background:#4f7cf7;color:#fff;font-size:11px;font-weight:700;padding:6px 10px}
+.field select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+@media(max-width:720px){.scanmetrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cellprod{width:170px}.scantable{font-size:11px}}

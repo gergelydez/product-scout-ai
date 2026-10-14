@@ -1,7 +1,7 @@
 import { parseNumber } from "./extract";
 import type { ScannedProduct } from "./types";
 
-const FIELDS = ["url", "image", "price", "oldPrice", "rating", "reviews", "seller"] as const;
+const FIELDS = ["url", "image", "price", "oldPrice", "rating", "reviews", "seller", "brand", "pnk", "fbe"] as const;
 
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -46,7 +46,7 @@ export function fillFromNearbyHtml(html: string, products: ScannedProduct[]): Sc
   });
   return products.map((p, i) => {
     const start = positions[i];
-    if (start < 0 || (p.price !== undefined && p.reviews !== undefined && p.rating !== undefined && p.image)) return p;
+    if (start < 0) return p;
     const nextStarts = positions.filter(x => x > start);
     const end = Math.min(nextStarts.length ? Math.min(...nextStarts) : start + 6000, start + 6000);
     // poza apare de obicei înainte de titlu: căutăm între produsul anterior și titlu
@@ -66,6 +66,10 @@ export function fillFromNearbyHtml(html: string, products: ScannedProduct[]): Sc
     if (out.reviews === undefined) {
       const m = after.match(/\((\d{1,6})\)/) ?? after.match(/(\d{1,6})\s*(?:review|recenzi)/i);
       if (m) out.reviews = Number(m[1]);
+    }
+    if (out.fbe === undefined) {
+      const plain = after.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+      if (/livrat de emag|fulfilled by emag|\bfbe\b/i.test(plain)) out.fbe = true;
     }
     if (!out.image) {
       const re = /(?:src|data-src|srcset)="(https?:\/\/[^"\s]+\.(?:jpe?g|png|webp)[^"\s]*)/gi;
