@@ -200,7 +200,8 @@ export function productsFromEmbeddedJson(html: string, base: string, imageBase =
 export function looksBlocked(status: number, html: string): string | undefined {
   if (status === 403 || status === 429) return `Marketplace-ul a refuzat cererea (HTTP ${status}).`;
   if (status >= 400) return `Marketplace-ul a răspuns cu HTTP ${status}.`;
-  if (/captcha|cf-chl|access denied|are you a robot|verify you are human/i.test(html.slice(0, 20000)))
+  if (/cf-chl|access denied|are you a robot|verify you are human|<title[^>]*>[^<]*(captcha|challenge|attention required|just a moment)/i.test(html.slice(0, 20000))
+    || (html.length < 40000 && /captcha/i.test(html)))
     return "Marketplace-ul a cerut verificare anti-robot (captcha).";
   return undefined;
 }

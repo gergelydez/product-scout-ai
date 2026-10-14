@@ -25,4 +25,8 @@ export type ScanResult = {
   error?: string;
   /** Site-ul a blocat cererea directă și nu e configurat un proxy */
   needsProxy?: boolean;
+  /** Pe ce cale a reușit scanarea */
+  via?: string;
+  /** Ce a răspuns fiecare încercare (pentru diagnostic) */
+  debug?: string[];
 };

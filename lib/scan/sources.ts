@@ -73,32 +73,11 @@ export function parseEmagHtml(html: string): ScannedProduct[] {
   return out;
 }
 
-export async function scan(source: Source, q: string): Promise<ScanResult> {
-  const url = searchUrl(source, q);
-  const base: ScanResult = { ok: false, source, query: q, searchUrl: url, fetchedAt: new Date().toISOString(), products: [] };
-  const key = process.env.SCRAPERAPI_KEY?.trim();
-  const attempts: (() => Promise<Page>)[] = [() => fetchDirect(url)];
-  if (key) attempts.push(() => fetchViaScraperApi(url, key, false), () => fetchViaScraperApi(url, key, true));
+function pageTitle(html: string): string {
+  return (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+}
 
-  let page: Page | undefined, lastError = "";
-  for (const attempt of attempts) {
-    try {
-      const p = await attempt();
-      const blocked = looksBlocked(p.status, p.html);
-      if (!blocked) { page = p; break; }
-      lastError = blocked;
-    } catch (e) {
-      lastError = `Nu am putut contacta ${siteName(source)}: ${(e as Error).message}`;
-    }
-  }
-  if (!page) {
-    const hint = key
-      ? " Nici prin ScraperAPI nu a mers; verifică creditele rămase în contul ScraperAPI."
-      : " Serverul aplicației este blocat de protecția anti-roboți. Soluția: adaugă o cheie ScraperAPI (SCRAPERAPI_KEY) în setările Vercel.";
-    return { ...base, error: `${siteName(source)}: ${lastError}${hint}`, needsProxy: !key };
-  }
-  const html = page.html;
-
+function extractProducts(source: Source, html: string): { products: ScannedProduct[]; method: ScanResult["method"] } {
   const siteBase = source === "emag" ? "https://www.emag.ro" : "https://www.trendyol.com/ro";
   let products = productsFromEmbeddedJson(html, siteBase, source === "trendyol" ? "https://cdn.dsmcdn.com" : siteBase);
   let method: ScanResult["method"] = "json";
@@ -106,6 +85,33 @@ export async function scan(source: Source, q: string): Promise<ScanResult> {
     const fromHtml = parseEmagHtml(html);
     if (fromHtml.length > products.length) { products = fromHtml; method = "html"; }
   }
-  if (!products.length) return { ...base, error: "Pagina s-a încărcat, dar nu am găsit produse în ea (structura site-ului s-a schimbat sau căutarea nu are rezultate)." };
-  return { ...base, ok: true, products: products.slice(0, 60), method };
+  return { products, method };
+}
+
+export async function scan(source: Source, q: string): Promise<ScanResult> {
+  const url = searchUrl(source, q);
+  const base: ScanResult = { ok: false, source, query: q, searchUrl: url, fetchedAt: new Date().toISOString(), products: [], debug: [] };
+  const key = process.env.SCRAPERAPI_KEY?.trim();
+  const attempts: [string, () => Promise<Page>][] = [["direct", () => fetchDirect(url)]];
+  if (key) attempts.push(["ScraperAPI", () => fetchViaScraperApi(url, key, false)], ["ScraperAPI premium", () => fetchViaScraperApi(url, key, true)]);
+
+  let lastError = "";
+  for (const [via, attempt] of attempts) {
+    let p: Page;
+    try { p = await attempt(); } catch (e) {
+      lastError = `Nu am putut contacta ${siteName(source)}: ${(e as Error).message}`;
+      base.debug!.push(`${via}: eroare rețea (${(e as Error).message})`);
+      continue;
+    }
+    base.debug!.push(`${via}: HTTP ${p.status}, ${Math.round(p.html.length / 1024)} KB, titlu „${pageTitle(p.html)}”`);
+    // Încercăm întâi extragerea: paginile normale pot conține cuvântul „recaptcha” fără să fie blocate.
+    const { products, method } = p.status < 400 ? extractProducts(source, p.html) : { products: [], method: undefined };
+    if (products.length) return { ...base, ok: true, products: products.slice(0, 60), method, via };
+    lastError = looksBlocked(p.status, p.html)
+      ?? "Pagina s-a încărcat, dar nu am găsit produse în ea (structura site-ului s-a schimbat sau căutarea nu are rezultate).";
+  }
+  const hint = key
+    ? " Nici prin ScraperAPI nu a mers. Trimite detaliile de mai jos pentru diagnostic."
+    : " Serverul aplicației este blocat de protecția anti-roboți. Soluția: adaugă o cheie ScraperAPI (SCRAPERAPI_KEY) în setările Vercel.";
+  return { ...base, error: `${siteName(source)}: ${lastError}${hint}`, needsProxy: !key };
 }
