@@ -6,7 +6,7 @@ import { looksBlocked } from "@/lib/scan/extract";
 
 export const dynamic = "force-dynamic";
 export const preferredRegion = ["fra1"];
-export const maxDuration = 150;
+export const maxDuration = 60;
 
 export type AmazonListResult = {
   ok: boolean;
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
 
   const result: AmazonListResult = { ok: false, market, url, products: [], fetchedAt: new Date().toISOString(), debug: [] };
   let lastError = "";
-  for (const [via, attempt] of fetchAttempts(url, MARKETS[market].lang)) {
+  for (const [via, attempt] of fetchAttempts(url, MARKETS[market].lang, { skipDirect: true, render: false, timeoutMs: 28000 })) {
     try {
       const p = await attempt();
       result.debug.push(`${via}: HTTP ${p.status}, ${Math.round(p.html.length / 1024)} KB, titlu „${pageTitle(p.html)}”`);

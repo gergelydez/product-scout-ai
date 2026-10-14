@@ -77,6 +77,7 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
   async function discoverTrends() {
     setTrendMode(true);
     setError(null);
+    setData(null);
     const all = new Map<string, AmazonProduct>();
     const categoryOf = new Map<string, string>();
     const failed: string[] = [];
@@ -89,7 +90,10 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
         const c = queue.shift()!;
         setLoading(`Citesc Movers & Shakers ${MARKETS[market].label}: ${c.label} (${++done}/${CATEGORIES.length})`);
         try {
-          const r: AmazonListResult = await (await fetch(`/api/amazon?${new URLSearchParams({ market, list: "movers", category: c.id })}`)).json();
+          const res = await fetch(`/api/amazon?${new URLSearchParams({ market, list: "movers", category: c.id })}`);
+          const raw = await res.text();
+          let r: AmazonListResult;
+          try { r = JSON.parse(raw); } catch { failed.push(c.label); debug.push(`[${c.label}] HTTP ${res.status} de la serverul aplicației (posibil timp depășit): ${raw.slice(0, 200)}`); continue; }
           if (!r.ok) { failed.push(c.label); debug.push(`[${c.label}] ${r.url}`, `  ${r.error ?? ""}`, ...r.debug); continue; }
           for (const p of r.products) if (!all.has(p.asin)) { all.set(p.asin, p); categoryOf.set(p.asin, c.label); }
         } catch (e) { failed.push(c.label); debug.push(`[${c.label}] ${(e as Error).message}`); }
@@ -115,7 +119,10 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
     setLoading("Citesc topul Amazon…");
     try {
       const params = new URLSearchParams(customUrl.trim() ? { url: customUrl.trim() } : { market, list, category });
-      const r: AmazonListResult = await (await fetch(`/api/amazon?${params}`)).json();
+      const res = await fetch(`/api/amazon?${params}`);
+      const raw = await res.text();
+      let r: AmazonListResult;
+      try { r = JSON.parse(raw); } catch { setError({ msg: `Serverul aplicației a răspuns cu HTTP ${res.status} (posibil timp depășit). Încearcă din nou.`, debug: [raw.slice(0, 500)] }); return; }
       if (!r.ok) { setError({ msg: r.error ?? "Eroare necunoscută", debug: r.debug, url: r.url }); return; }
       const { rows, engine } = await withKeywords(r.products);
       const next = { rows, fetchedAt: r.fetchedAt, engine, url: r.url, market: r.market };
@@ -201,7 +208,7 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
       </div>
       <div className="trendcta">
         <button className="trendbtn" onClick={discoverTrends} disabled={!!loading}><Sparkles size={16} /> Descoperă trenduri: Movers & Shakers din toate categoriile ({MARKETS[market].label})</button>
-        <span className="footnote">≈ {CATEGORIES.length}–{CATEGORIES.length * 4} cereri ScraperAPI · păstrează doar produse generice, fără mărci mari, baterii sau accesorii pentru un model anume.</span>
+        <span className="footnote">≈ {CATEGORIES.length}–{CATEGORIES.length * 2} cereri ScraperAPI · păstrează doar produse generice, fără mărci mari, baterii sau accesorii pentru un model anume.</span>
       </div>
       <details className="footnote" style={{ marginTop: 10 }}><summary>Sau lipește un link Amazon (orice subcategorie Best Sellers / Movers & Shakers)</summary>
         <input className="urlinput" value={customUrl} onChange={e => setCustomUrl(e.target.value)} placeholder="https://www.amazon.co.uk/gp/movers-and-shakers/kitchen/…" />

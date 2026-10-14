@@ -72,3 +72,7 @@ img.logo{width:44px;height:44px;border-radius:13px;background:none;box-shadow:0 
 .trendbtn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:12px;padding:12px 16px;font-weight:800;color:#fff;background:linear-gradient(120deg,#059669,#10b981 60%,#34d399);box-shadow:0 6px 18px #10b98140}
 .trendbtn:disabled{opacity:.6;cursor:wait}
 .catlabel{font-size:10px;color:var(--muted);margin-top:2px}
+.cellprod>div{min-width:0;overflow:hidden;flex:1}
+.cellprod a{display:block;max-width:100%}
+.scantable td{max-width:420px}
+.scantable td.reasons{max-width:none}
