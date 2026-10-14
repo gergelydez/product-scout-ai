@@ -49,3 +49,12 @@ eMAG/Trendyol pot bloca serverele de hosting (de ex. Vercel). Aplicația poate t
 3. **Deployments** → ultimul deployment → **Redeploy**.
 
 Aplicația încearcă întâi direct (gratuit); doar dacă e blocată folosește ScraperAPI, apoi, dacă tot e blocată, varianta premium a ScraperAPI (consumă mai multe credite).
+
+## Amazon → eMAG: produse validate
+Tabul **„Amazon → eMAG”** găsește oportunități fără să scrii cuvinte-cheie:
+1. Alegi Amazon UK sau DE, lista (**Movers & Shakers** = produse în creștere rapidă, **Best Sellers** = cele mai vândute) și categoria, sau lipești orice link de subcategorie.
+2. Aplicația citește topul (prin ScraperAPI) și transformă titlurile în cuvinte-cheie românești. Le poți corecta manual.
+3. „Verifică pe eMAG” scanează eMAG pentru produsele selectate (implicit primele 10) și calculează un **scor de oportunitate 0–100**: 40% cerere pe Amazon (poziție, recenzii, creștere) + 40% concurență scăzută pe eMAG (număr de rezultate, recenzii în top 10) + 20% spațiu de preț (preț median eMAG vs. Amazon în lei).
+4. Rezultatele rămân salvate în browser, ca să nu consumi credite de două ori.
+
+Opțional, pentru cuvinte-cheie mai bune: adaugă în Vercel variabila `ANTHROPIC_API_KEY` (cheie de la console.anthropic.com). Fără ea se folosește Google Translate (gratuit), cu rezultate mai brute.

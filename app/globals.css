@@ -41,3 +41,13 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1180px;mar
 .calcbtn{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:7px;background:#4f7cf7;color:#fff;font-size:11px;font-weight:700;padding:6px 10px}
 .field select{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
 @media(max-width:720px){.scanmetrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}.cellprod{width:170px}.scantable{font-size:11px}}
+.finderform{display:grid;grid-template-columns:1fr 1.4fr 1.4fr auto;gap:10px;align-items:end;margin-top:10px}
+.urlinput{width:100%;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:10px}
+.progress{display:flex;align-items:center;gap:8px;font-size:13px;color:#343a50}
+.findertable{min-width:1500px}
+.kwinput{width:170px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:12px}
+.oppscore{display:inline-grid;place-items:center;min-width:34px;height:26px;border-radius:8px;font-weight:800;font-size:12px;background:#eef0f6;color:#5c6378}
+.oppscore.mare{background:#dcf7e9;color:#08774e}.oppscore.medie{background:#fff4df;color:#8b5b0b}.oppscore.mică{background:#f6e7e7;color:#9b2c2c}
+.reasons{white-space:normal!important;min-width:220px;font-size:11px;color:#515970}
+.findertable a.secondary{padding:6px 9px;font-size:11px;text-decoration:none}
+@media(max-width:720px){.finderform{grid-template-columns:1fr}}
