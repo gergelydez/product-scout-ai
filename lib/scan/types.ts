@@ -38,4 +38,8 @@ export type ScanResult = {
   debug?: string[];
   /** Fragmente din pagina reală, pentru reglarea extragerii */
   samples?: string[];
+  /** Termenul folosit efectiv, dacă diferă de cel cerut (ex. tradus în engleză) */
+  queryUsed?: string;
+  /** Avertisment: rezultatele par să nu corespundă căutării */
+  warning?: string;
 };

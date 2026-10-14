@@ -9,7 +9,7 @@ const siteName = (s: Source) => (s === "emag" ? "eMAG" : "Trendyol");
 export function searchUrl(source: Source, q: string): string {
   return source === "emag"
     ? `https://www.emag.ro/search/${encodeURIComponent(q.trim())}`
-    : `https://www.trendyol.com/ro/sr?q=${encodeURIComponent(q.trim())}`;
+    : `https://www.trendyol.com/ro/sr?${new URLSearchParams({ q: q.trim(), qt: q.trim(), st: q.trim(), os: "1" })}`;
 }
 
 /** Fallback pentru cardurile de produs eMAG din HTML. */
@@ -65,7 +65,45 @@ function extractProducts(source: Source, html: string): { products: ScannedProdu
   return { products, method, samples };
 }
 
+const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+/** Ce procent din titluri conțin măcar un cuvânt (primele 5 litere) din căutare. */
+export function relevance(q: string, products: ScannedProduct[]): number {
+  const stems = fold(q).split(/[^a-z0-9]+/).filter(w => w.length >= 3).map(w => w.slice(0, 5));
+  if (!stems.length || !products.length) return 1;
+  const hits = products.filter(p => { const t = fold(p.title); return stems.some(st => t.includes(st)); }).length;
+  return hits / products.length;
+}
+
+async function toEnglish(q: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as [[string, string][]];
+    const en = data[0].map(x => x[0]).join("").trim().toLowerCase();
+    return en && en !== q.toLowerCase() ? en : undefined;
+  } catch { return undefined; }
+}
+
+/**
+ * Scanare cu verificarea relevanței: dacă site-ul afișează recomandări în loc de rezultate
+ * (frecvent pe Trendyol RO, unde titlurile sunt în engleză), reîncercăm cu termenul tradus în engleză.
+ */
 export async function scan(source: Source, q: string): Promise<ScanResult> {
+  const first = await scanOnce(source, q);
+  if (!first.ok || first.products.length < 8 || relevance(q, first.products) >= 0.25) return first;
+  const en = await toEnglish(q);
+  const note = `Doar ${Math.round(relevance(q, first.products) * 100)}% din rezultate conțin „${q}” – site-ul a afișat probabil recomandări.`;
+  if (en) {
+    const second = await scanOnce(source, en);
+    if (second.ok && relevance(en, second.products) > relevance(q, first.products)) {
+      return { ...second, query: q, queryUsed: en, warning: `${note} Am căutat în schimb „${en}”.`, debug: [...(first.debug ?? []), ...(second.debug ?? [])] };
+    }
+  }
+  return { ...first, warning: `${note} Încearcă un termen mai precis${source === "trendyol" ? " sau în engleză" : ""}.` };
+}
+
+async function scanOnce(source: Source, q: string): Promise<ScanResult> {
   const url = searchUrl(source, q);
   const base: ScanResult = { ok: false, source, query: q, searchUrl: url, fetchedAt: new Date().toISOString(), products: [], debug: [] };
   const key = process.env.SCRAPERAPI_KEY?.trim();

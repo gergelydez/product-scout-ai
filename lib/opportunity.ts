@@ -12,6 +12,7 @@ export type EmagCheck = {
   avgReviewsTop10?: number;
   medianPrice?: number;
   minPrice?: number;
+  warning?: string;
   top10Units?: number;
 };
 
@@ -34,7 +35,7 @@ export function emagCheckFrom(keyword: string, r: ScanResult): EmagCheck {
   return {
     keyword, checkedAt: r.fetchedAt, ok: true,
     totalResults: r.totalResults, found: r.products.length,
-    avgReviewsTop10: s.avgReviewsTop10, medianPrice: s.medianPrice, minPrice: s.minPrice, top10Units: top10.estMonthlyUnits,
+    avgReviewsTop10: s.avgReviewsTop10, medianPrice: s.medianPrice, minPrice: s.minPrice, warning: r.warning, top10Units: top10.estMonthlyUnits,
   };
 }
 
@@ -59,6 +60,7 @@ export function scoreOpportunity(a: AmazonProduct, e: EmagCheck | undefined, cur
 
   if (!e?.ok) return { score: Math.round(demand * 40), label: "Mică", demand, competition: 1, reasons: [...reasons, "Nevalidat pe eMAG"] };
 
+  if (e.warning) reasons.push("Rezultatele eMAG nu par legate de cuvânt – corectează cuvântul-cheie");
   let competition: number;
   if (e.found < 5) { competition = 0.05; reasons.push("Aproape inexistent pe eMAG"); }
   else {

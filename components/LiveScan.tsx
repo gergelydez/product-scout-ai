@@ -97,8 +97,10 @@ export default function LiveScan({ initialQuery, trigger, onCalc }: { initialQue
 
     {result?.ok && <>
       <div className="sectionhead" style={{ marginTop: 18 }}>
-        <div><h3>Rezultate pentru „{result.query}”</h3><p>Primele {sum.count}{result.totalResults ? ` din ${num(result.totalResults)}` : ""} rezultate · {result.source === "emag" ? "eMAG" : "Trendyol"} · {new Date(result.fetchedAt).toLocaleTimeString("ro-RO")}{result.via && result.via !== "direct" ? ` · prin ${result.via}` : ""}</p></div>
+        <div><h3>Rezultate pentru „{result.query}”</h3><p>Primele {sum.count}{result.totalResults ? ` din ${num(result.totalResults)}` : ""} rezultate{result.queryUsed ? ` pentru „${result.queryUsed}”` : ""} · {result.source === "emag" ? "eMAG" : "Trendyol"} · {new Date(result.fetchedAt).toLocaleTimeString("ro-RO")}{result.via && result.via !== "direct" ? ` · prin ${result.via}` : ""}</p></div>
       </div>
+
+      {result.warning && <div className="panel scanerror" style={{ marginTop: 0 }}><AlertTriangle size={18} /><div><strong>Atenție la rezultate</strong><p>{result.warning}</p></div></div>}
 
       <div className="metrics scanmetrics">
         <div className="metric"><div className="label">Toate rezultatele</div><strong>{num(result.totalResults)}</strong><small>raportate de site</small></div>
