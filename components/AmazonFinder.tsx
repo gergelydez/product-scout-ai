@@ -5,11 +5,14 @@ import { Loader2, Download, Sparkles, AlertTriangle, ScanSearch, ExternalLink } 
 import type { AmazonListResult } from "@/app/api/amazon/route";
 import { CATEGORIES, MARKETS, type ListType, type Market } from "@/lib/amazon/categories";
 import type { AmazonProduct } from "@/lib/amazon/parse";
-import { emagCheckFrom, FX_RON, scoreOpportunity, type EmagCheck } from "@/lib/opportunity";
+import { emagCheckFrom, scoreOpportunity, type EmagCheck } from "@/lib/opportunity";
+import { calculate, sale } from "@/lib/importCalc";
+import { useCalcSettings, useFx } from "@/lib/useShared";
+import { FxBadge, type CalcPreset } from "./ImportCalculator";
 import type { ScanResult } from "@/lib/scan/types";
 import { alibabaUrl } from "./LiveScan";
 
-type Row = { product: AmazonProduct; keyword: string; check?: EmagCheck };
+type Row = { product: AmazonProduct; keyword: string; check?: EmagCheck; aliUsd?: number; kg?: number };
 type Saved = { rows: Row[]; fetchedAt: string; engine?: string; url: string; market: Market };
 
 const CACHE_KEY = "scout-amazon-finder";
@@ -23,7 +26,9 @@ function saveCache(key: string, v: Saved) {
   try { const all = loadCache(); all[key] = v; localStorage.setItem(CACHE_KEY, JSON.stringify(all)); } catch {}
 }
 
-export default function AmazonFinder({ onOpenScan }: { onOpenScan: (keyword: string) => void }) {
+export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyword: string) => void; onCalc: (p: Omit<CalcPreset, "key">) => void }) {
+  const fx = useFx();
+  const [calcSettings] = useCalcSettings();
   const [market, setMarket] = useState<Market>("uk");
   const [list, setList] = useState<ListType>("movers");
   const [category, setCategory] = useState("kitchen");
@@ -89,15 +94,24 @@ export default function AmazonFinder({ onOpenScan }: { onOpenScan: (keyword: str
 
   const currency = MARKETS[data?.market ?? market].currency;
   const scored = useMemo(() => (data?.rows ?? [])
-    .map(r => ({ ...r, opp: scoreOpportunity(r.product, r.check?.keyword === r.keyword ? r.check : undefined, currency) }))
+    .map(r => {
+      const valid = r.check?.keyword === r.keyword ? r.check : undefined;
+      const calc = fx && r.aliUsd ? calculate({ aliPriceUsd: r.aliUsd, weightKg: r.kg ?? 0.5, salePrice: valid?.medianPrice }, calcSettings, fx.USD) : undefined;
+      const atMin = calc && valid?.minPrice ? sale(valid.minPrice, calc.landedLei, calcSettings) : undefined;
+      return { ...r, calc, atMin, opp: scoreOpportunity(r.product, valid, currency, fx, calc?.at?.marginPct) };
+    })
     .filter(r => !onlyGood || r.opp.label !== "Mică")
-    .sort((a, b) => b.opp.score - a.opp.score || a.product.rank - b.product.rank), [data, onlyGood, currency]);
+    .sort((a, b) => b.opp.score - a.opp.score || a.product.rank - b.product.rank), [data, onlyGood, currency, fx, calcSettings]);
 
   const validatedCount = data?.rows.filter(r => r.check?.ok).length ?? 0;
 
   function setKeyword(asin: string, keyword: string) {
     if (!data) return;
     persist({ ...data, rows: data.rows.map(r => (r.product.asin === asin ? { ...r, keyword } : r)) });
+  }
+  function setCost(asin: string, patch: Partial<Pick<Row, "aliUsd" | "kg">>) {
+    if (!data) return;
+    persist({ ...data, rows: data.rows.map(r => (r.product.asin === asin ? { ...r, ...patch } : r)) });
   }
   function toggle(asin: string) {
     setSelected(s => { const n = new Set(s); n.has(asin) ? n.delete(asin) : n.add(asin); return n; });
@@ -132,7 +146,7 @@ export default function AmazonFinder({ onOpenScan }: { onOpenScan: (keyword: str
 
     {data && <>
       <div className="sectionhead" style={{ marginTop: 18 }}>
-        <div><h3>{data.rows.length} produse · {validatedCount} verificate pe eMAG</h3><p>Încărcat {new Date(data.fetchedAt).toLocaleString("ro-RO")} · cuvinte-cheie: {data.engine === "claude" ? "Claude AI" : data.engine === "google" ? "Google Translate (poți corecta manual)" : "simplificate (corectează manual)"} · curs {currency === "GBP" ? `1 £ = ${FX_RON.GBP}` : `1 € = ${FX_RON.EUR}`} lei</p></div>
+        <div><h3>{data.rows.length} produse · {validatedCount} verificate pe eMAG</h3><p>Încărcat {new Date(data.fetchedAt).toLocaleString("ro-RO")} · cuvinte-cheie: {data.engine === "claude" ? "Claude AI" : data.engine === "google" ? "Google Translate (poți corecta manual)" : "simplificate (corectează manual)"} · </p><FxBadge /></div>
       </div>
       <div className="scantools">
         <button className="primary" onClick={validate} disabled={!!loading || selected.size === 0}>Verifică pe eMAG ({selected.size} selectate)</button>
@@ -147,16 +161,16 @@ export default function AmazonFinder({ onOpenScan }: { onOpenScan: (keyword: str
       <div className="scantablewrap"><table className="scantable findertable">
         <thead><tr>
           <th></th><th>Scor</th><th>#</th><th className="sticky">Produs Amazon</th><th>Preț</th><th>Rating</th><th>Recenzii</th><th>Creștere</th>
-          <th>Cuvânt-cheie eMAG</th><th>Rezultate eMAG</th><th>Rec. medii top 10</th><th>Preț median eMAG</th><th>Unități/lună top 10*</th><th>De ce</th><th></th>
+          <th>Cuvânt-cheie eMAG</th><th>Rezultate eMAG</th><th>Rec. medii top 10</th><th>Preț median eMAG</th><th>Unități/lună top 10*</th><th className="costcol">Alibaba $/buc</th><th className="costcol">kg/buc</th><th>Cost marfă</th><th>Preț minim eMAG</th><th>Profit la median</th><th>Profit la cel mai mic preț</th><th>De ce</th><th></th>
         </tr></thead>
-        <tbody>{scored.map(({ product: p, keyword, check, opp }) => {
+        <tbody>{scored.map(({ product: p, keyword, check, opp, aliUsd, kg, calc, atMin }) => {
           const valid = check?.keyword === keyword ? check : undefined;
           return <tr key={p.asin}>
             <td><input type="checkbox" checked={selected.has(p.asin)} onChange={() => toggle(p.asin)} aria-label="Selectează" /></td>
             <td><span className={`oppscore ${opp.label.toLowerCase()}`} title={`Cerere ${Math.round(opp.demand * 100)} · Concurență ${Math.round(opp.competition * 100)}`}>{valid?.ok ? opp.score : "?"}</span></td>
             <td>{p.rank}</td>
             <td className="sticky"><div className="cellprod">{p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="scanimg" />}<a href={p.url} target="_blank" rel="noreferrer" title={p.title}>{p.title}</a></div></td>
-            <td className="num">{p.price !== undefined ? <>{currency === "GBP" ? "£" : "€"}{fmt(p.price, 2)}<s style={{ textDecoration: "none" }}>≈ {lei(p.price * FX_RON[currency])}</s></> : "–"}</td>
+            <td className="num">{p.price !== undefined ? <>{currency === "GBP" ? "£" : "€"}{fmt(p.price, 2)}{fx && <s style={{ textDecoration: "none" }}>≈ {lei(p.price * fx[currency])}</s>}</> : "–"}</td>
             <td className="num">{p.rating ? <><span className="star">★</span> {fmt(p.rating, 1)}</> : "–"}</td>
             <td className="num">{fmt(p.reviews)}</td>
             <td className="num">{p.rankChangePct ? <span className="trend">+{fmt(p.rankChangePct)}%</span> : "–"}</td>
@@ -164,8 +178,14 @@ export default function AmazonFinder({ onOpenScan }: { onOpenScan: (keyword: str
             {valid?.ok
               ? <><td className="num">{fmt(valid.totalResults ?? valid.found)}</td><td className="num">{fmt(valid.avgReviewsTop10)}</td><td className="num">{lei(valid.medianPrice)}</td><td className="num">{fmt(valid.top10Units)}</td></>
               : <td colSpan={4} className="footnote">{valid ? `Eroare: ${valid.error?.slice(0, 60)}` : check ? "Cuvânt schimbat – verifică din nou" : "Neverificat"}</td>}
+            <td className="costcol"><input className="numinput" type="number" step="0.01" placeholder="$" value={aliUsd ?? ""} onChange={e => setCost(p.asin, { aliUsd: e.target.value === "" ? undefined : Number(e.target.value) })} /></td>
+            <td className="costcol"><input className="numinput" type="number" step="0.05" placeholder="0.5" value={kg ?? ""} onChange={e => setCost(p.asin, { kg: e.target.value === "" ? undefined : Number(e.target.value) })} /></td>
+            <td className="num">{calc ? lei(calc.landedLei) : "–"}</td>
+            <td className="num"><b>{calc ? lei(calc.breakEvenPrice) : "–"}</b>{calc && <s style={{ textDecoration: "none" }}>marjă {calcSettings.targetMarginPct}%: {lei(calc.targetPrice)}</s>}</td>
+            <td className={`num ${calc?.at ? (calc.at.netProfit > 0 ? "pos" : "neg") : ""}`}>{calc?.at ? <>{lei(calc.at.netProfit)}<s style={{ textDecoration: "none" }}>{calc.at.marginPct.toFixed(0)}% marjă</s></> : "–"}</td>
+            <td className={`num ${atMin ? (atMin.netProfit > 0 ? "pos" : "neg") : ""}`}>{atMin ? <>{lei(atMin.netProfit)}<s style={{ textDecoration: "none" }}>la {lei(valid?.minPrice)}</s></> : "–"}</td>
             <td className="reasons">{opp.reasons.join(" · ")}</td>
-            <td><div style={{ display: "flex", gap: 6 }}><button className="calcbtn" onClick={() => onOpenScan(keyword)}>Scan eMAG</button><a className="secondary" href={alibabaUrl(p.title)} target="_blank" rel="noreferrer">Alibaba</a></div></td>
+            <td><div style={{ display: "flex", gap: 6 }}><button className="calcbtn" onClick={() => onOpenScan(keyword)}>Scan eMAG</button><button className="secondary" onClick={() => onCalc({ title: keyword, salePrice: valid?.medianPrice, minPrice: valid?.minPrice, medianPrice: valid?.medianPrice, aliUsd, kg })}>Calculator</button><a className="secondary" href={alibabaUrl(p.title)} target="_blank" rel="noreferrer">Alibaba</a></div></td>
           </tr>;
         })}</tbody>
       </table></div>

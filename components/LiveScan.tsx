@@ -10,7 +10,7 @@ const num = (n?: number, d = 0) => n === undefined ? "–" : new Intl.NumberForm
 
 type SortKey = "position" | "price" | "reviews" | "rating" | "sales" | "revenue";
 
-export default function LiveScan({ initialQuery, trigger, onUsePrice }: { initialQuery: string; trigger: number; onUsePrice: (price: number) => void }) {
+export default function LiveScan({ initialQuery, trigger, onCalc }: { initialQuery: string; trigger: number; onCalc: (p: { title: string; salePrice?: number; minPrice?: number; medianPrice?: number }) => void }) {
   const [q, setQ] = useState(initialQuery);
   const [source, setSource] = useState<Source>("emag");
   const [loading, setLoading] = useState(false);
@@ -64,6 +64,7 @@ export default function LiveScan({ initialQuery, trigger, onUsePrice }: { initia
   }
 
   const sum = useMemo(() => summarize(result?.products ?? [], settings), [result, settings]);
+  const openCalc = (p: Row) => onCalc({ title: result?.query ?? p.title, salePrice: p.price, minPrice: sum.minPrice, medianPrice: sum.medianPrice });
   const hasFbe = allRows.some(p => p.fbe !== undefined);
 
   function exportCsv() {
@@ -159,11 +160,11 @@ export default function LiveScan({ initialQuery, trigger, onUsePrice }: { initia
               <td className="num">{p.rating ? <><span className="star">★</span> {num(p.rating, 1)}</> : "–"}</td>
               <td className="num">{num(p.reviews)}{t?.reviewDelta ? <span className="trend" title={`în ${num(t.days, 1)} zile`}>+{t.reviewDelta}</span> : null}</td>
               <td><a href={alibabaUrl(p.title)} target="_blank" rel="noreferrer">Vezi</a></td>
-              <td>{p.price !== undefined ? <button className="calcbtn" onClick={() => onUsePrice(p.price!)}>Calculator <Calculator size={12} /></button> : "–"}</td>
+              <td>{p.price !== undefined ? <button className="calcbtn" onClick={() => openCalc(p)}>Calculator <Calculator size={12} /></button> : "–"}</td>
             </tr>;
           })}</tbody>
         </table></div>
-        : <div className="scanlist">{rows.map(p => <ScanRow key={`${p.id}-${p.position}`} p={p} trend={trends[p.id]} onUsePrice={onUsePrice} />)}</div>}
+        : <div className="scanlist">{rows.map(p => <ScanRow key={`${p.id}-${p.position}`} p={p} trend={trends[p.id]} onUsePrice={() => openCalc(p)} />)}</div>}
       <p className="footnote" style={{ marginTop: 10 }}>*Estimare ({modelNote}). Nu sunt vânzări reale.</p>
       {!(rows.filter(p => p.price === undefined).length > rows.length / 2) && <details className="footnote" style={{ marginTop: 6 }}><summary>Diagnostic pentru suport</summary><Diagnostic result={result} quiet /></details>}
     </>}
@@ -181,7 +182,7 @@ export function alibabaUrl(title: string): string {
   return `https://www.alibaba.com/trade/search?SearchText=${encodeURIComponent(words)}`;
 }
 
-function ScanRow({ p, trend, onUsePrice }: { p: Row; trend?: Trend; onUsePrice: (n: number) => void }) {
+function ScanRow({ p, trend, onUsePrice }: { p: Row; trend?: Trend; onUsePrice: () => void }) {
   return <article className="scanrow">
     <div className="scanpos">#{p.position}</div>
     {p.image ? <img src={p.image} alt="" loading="lazy" /> : <div className="scanimg" />}
@@ -197,7 +198,7 @@ function ScanRow({ p, trend, onUsePrice }: { p: Row; trend?: Trend; onUsePrice: 
         <div><small>Sursă</small><strong><a href={alibabaUrl(p.title)} target="_blank" rel="noreferrer">Alibaba</a></strong></div>
       </div>
     </div>
-    {p.price !== undefined && <button className="secondary scancalc" onClick={() => onUsePrice(p.price!)} title="Calculează profitul la acest preț"><Calculator size={14} /></button>}
+    {p.price !== undefined && <button className="secondary scancalc" onClick={onUsePrice} title="Calculează profitul la acest preț"><Calculator size={14} /></button>}
   </article>;
 }
 

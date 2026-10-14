@@ -11,6 +11,7 @@ export type EmagCheck = {
   found: number;
   avgReviewsTop10?: number;
   medianPrice?: number;
+  minPrice?: number;
   top10Units?: number;
 };
 
@@ -23,7 +24,8 @@ export type Opportunity = {
   reasons: string[];
 };
 
-export const FX_RON = { GBP: 5.85, EUR: 4.97 };
+/** Lei pentru 1 GBP / 1 EUR (curs BNR live). */
+export type FxLike = { GBP: number; EUR: number };
 
 export function emagCheckFrom(keyword: string, r: ScanResult): EmagCheck {
   if (!r.ok) return { keyword, checkedAt: r.fetchedAt, ok: false, error: r.error, found: 0 };
@@ -32,7 +34,7 @@ export function emagCheckFrom(keyword: string, r: ScanResult): EmagCheck {
   return {
     keyword, checkedAt: r.fetchedAt, ok: true,
     totalResults: r.totalResults, found: r.products.length,
-    avgReviewsTop10: s.avgReviewsTop10, medianPrice: s.medianPrice, top10Units: top10.estMonthlyUnits,
+    avgReviewsTop10: s.avgReviewsTop10, medianPrice: s.medianPrice, minPrice: s.minPrice, top10Units: top10.estMonthlyUnits,
   };
 }
 
@@ -42,9 +44,10 @@ const clamp = (x: number) => Math.max(0, Math.min(1, x));
  * Scor 0–100:
  *  40% cerere validată pe Amazon (poziție în top, recenzii, creștere Movers & Shakers)
  *  40% concurență scăzută pe eMAG (puține rezultate, puține recenzii în top 10)
- *  20% spațiu de preț (prețul median eMAG față de prețul Amazon convertit în lei)
+ *  20% spațiu de preț: marja netă reală la prețul median eMAG, dacă e completat costul Alibaba
+ *      (30% marjă = maxim); altfel prețul median eMAG față de prețul Amazon în lei
  */
-export function scoreOpportunity(a: AmazonProduct, e: EmagCheck | undefined, currency: "GBP" | "EUR", fx = FX_RON): Opportunity {
+export function scoreOpportunity(a: AmazonProduct, e: EmagCheck | undefined, currency: "GBP" | "EUR", fx: FxLike | undefined, marginAtMedianPct?: number): Opportunity {
   const reasons: string[] = [];
   const rankScore = clamp(1 - (a.rank - 1) / 100);
   const reviewScore = clamp(Math.log10((a.reviews ?? 0) + 1) / 4); // 10.000 recenzii = 1
@@ -67,7 +70,10 @@ export function scoreOpportunity(a: AmazonProduct, e: EmagCheck | undefined, cur
   }
 
   let priceRoom: number | undefined;
-  if (a.price && e.medianPrice) {
+  if (marginAtMedianPct !== undefined) {
+    priceRoom = clamp(marginAtMedianPct / 30);
+    reasons.push(marginAtMedianPct > 0 ? `Marjă netă ${marginAtMedianPct.toFixed(0)}% la prețul median` : "Pierdere la prețul median eMAG");
+  } else if (a.price && e.medianPrice && fx) {
     const amazonRon = a.price * fx[currency];
     priceRoom = clamp(e.medianPrice / amazonRon / 1.5); // eMAG la 1,5× prețul Amazon = maxim
     if (e.medianPrice >= amazonRon) reasons.push("Preț eMAG ≥ preț Amazon");

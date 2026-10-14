@@ -51,3 +51,18 @@ button,input,select{font:inherit}button{cursor:pointer}.app{max-width:1180px;mar
 .reasons{white-space:normal!important;min-width:220px;font-size:11px;color:#515970}
 .findertable a.secondary{padding:6px 9px;font-size:11px;text-decoration:none}
 @media(max-width:720px){.finderform{grid-template-columns:1fr}}
+.fxbadge{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#515970;background:#f0f2f8;border-radius:8px;padding:5px 9px;margin:4px 0}
+.calcgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+.calckpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
+.kpi{border:1px solid var(--line);border-radius:12px;padding:11px;background:#fff}.kpi small{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}.kpi strong{font-size:18px}
+.kpi.warn{background:#fff8ec;border-color:#f6e1b8}.kpi.good{background:#f0fbf5;border-color:#d7f2e3}
+.compete{display:grid;gap:6px;margin-top:12px;font-size:13px}.compete div{border-radius:10px;padding:9px 11px}.compete .ok{background:#f0fbf5;color:#08603f}.compete .bad{background:#fdf0f0;color:#9b2c2c}
+.breakdown{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}.breakdown td{padding:7px 6px;border-bottom:1px solid #f0f1f6}.breakdown td:nth-child(2){color:var(--muted);font-size:11px}.breakdown td:last-child{text-align:right;font-weight:700;white-space:nowrap}
+.breakdown tr.muted td{color:#9097aa}.breakdown tr.total td{border-top:2px solid var(--line);font-weight:800}.breakdown tr.sep td{padding-top:14px;font-weight:800;color:#343a50}
+.breakdown tr.pos td:last-child,.scantable td.pos{color:#08774e}.breakdown tr.neg td:last-child,.scantable td.neg{color:#c0392b}
+.calcsettings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px;align-items:end}
+.calcsettings .check{grid-column:1/-1;font-size:12px;display:flex;gap:6px;align-items:center}
+.numinput{width:72px;padding:6px;border:1px solid var(--line);border-radius:7px;font-size:12px;text-align:right}
+.scantable th.costcol,.scantable td.costcol{background:#fbfaf3}
+.findertable{min-width:2100px}
+@media(max-width:720px){.calcgrid,.calckpis,.calcsettings{grid-template-columns:1fr 1fr}}
