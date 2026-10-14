@@ -29,4 +29,6 @@ export type ScanResult = {
   via?: string;
   /** Ce a răspuns fiecare încercare (pentru diagnostic) */
   debug?: string[];
+  /** Fragmente din pagina reală, pentru reglarea extragerii */
+  samples?: string[];
 };

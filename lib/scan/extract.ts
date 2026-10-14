@@ -71,21 +71,21 @@ function looksLikeProduct(v: Json): boolean {
   return !!firstString(v, NAME_KEYS) && /price|offer/.test(keys);
 }
 
-/** Caută recursiv cel mai mare array de obiecte care arată ca produse. */
-export function findProductArray(root: Json): Obj[] {
-  let best: Obj[] = [];
+/** Caută recursiv toate array-urile de obiecte care arată ca produse (cel puțin 3). */
+export function findProductArrays(root: Json): Obj[][] {
+  const found: Obj[][] = [];
   const seen = new Set<Json>();
   const walk = (v: Json, depth: number) => {
     if (depth > 12 || v === null || typeof v !== "object" || seen.has(v)) return;
     seen.add(v);
     if (Array.isArray(v)) {
       const hits = v.filter(looksLikeProduct);
-      if (hits.length >= 3 && hits.length >= v.length / 2 && hits.length > best.length) best = hits as Obj[];
+      if (hits.length >= 3 && hits.length >= v.length / 2) found.push(hits as Obj[]);
       v.forEach(x => walk(x, depth + 1));
     } else Object.values(v).forEach(x => walk(x, depth + 1));
   };
   walk(root, 0);
-  return best;
+  return found;
 }
 
 /** Caută prima valoare a unei chei care se potrivește cu `re`, până la adâncimea dată. */
@@ -187,14 +187,20 @@ export function normalizeProducts(items: Obj[], base: string, imageBase = base):
   })).filter(p => p.title);
 }
 
-/** Extrage produse din orice JSON încorporat în pagină. */
+export type JsonList = { products: ScannedProduct[]; sample: string };
+
+/** Extrage toate listele de produse din JSON-ul încorporat în pagină. */
+export function productListsFromEmbeddedJson(html: string, base: string, imageBase = base): JsonList[] {
+  const out: JsonList[] = [];
+  for (const blob of extractJsonBlobs(html))
+    for (const arr of findProductArrays(blob))
+      out.push({ products: normalizeProducts(arr, base, imageBase), sample: JSON.stringify(arr[0]).slice(0, 1500) });
+  return out;
+}
+
+/** Cea mai lungă listă (compatibilitate cu testele existente). */
 export function productsFromEmbeddedJson(html: string, base: string, imageBase = base): ScannedProduct[] {
-  let best: Obj[] = [];
-  for (const blob of extractJsonBlobs(html)) {
-    const arr = findProductArray(blob);
-    if (arr.length > best.length) best = arr;
-  }
-  return normalizeProducts(best, base, imageBase);
+  return productListsFromEmbeddedJson(html, base, imageBase).reduce<ScannedProduct[]>((a, l) => (l.products.length > a.length ? l.products : a), []);
 }
 
 export function looksBlocked(status: number, html: string): string | undefined {

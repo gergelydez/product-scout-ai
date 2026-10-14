@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
-import { looksBlocked, parseNumber, productsFromEmbeddedJson } from "./extract";
+import { looksBlocked, parseNumber, productListsFromEmbeddedJson } from "./extract";
+import { fillFromNearbyHtml, htmlAroundFirstProduct, mergeLists } from "./merge";
 import type { ScannedProduct, ScanResult, Source } from "./types";
 
 const HEADERS = {
@@ -77,15 +78,19 @@ function pageTitle(html: string): string {
   return (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
-function extractProducts(source: Source, html: string): { products: ScannedProduct[]; method: ScanResult["method"] } {
+function extractProducts(source: Source, html: string): { products: ScannedProduct[]; method: ScanResult["method"]; samples: string[] } {
   const siteBase = source === "emag" ? "https://www.emag.ro" : "https://www.trendyol.com/ro";
-  let products = productsFromEmbeddedJson(html, siteBase, source === "trendyol" ? "https://cdn.dsmcdn.com" : siteBase);
-  let method: ScanResult["method"] = "json";
-  if (source === "emag") {
-    const fromHtml = parseEmagHtml(html);
-    if (fromHtml.length > products.length) { products = fromHtml; method = "html"; }
-  }
-  return { products, method };
+  const jsonLists = productListsFromEmbeddedJson(html, siteBase, source === "trendyol" ? "https://cdn.dsmcdn.com" : siteBase);
+  const htmlList = source === "emag" ? parseEmagHtml(html) : [];
+  const merged = mergeLists([...jsonLists.map(l => l.products), htmlList]);
+  const products = fillFromNearbyHtml(html, merged);
+  const method: ScanResult["method"] = htmlList.length >= merged.length && htmlList.length ? "html" : "json";
+  const samples = [
+    ...jsonLists.map((l, i) => `JSON listă ${i + 1} (${l.products.length} produse): ${l.sample}`),
+    `HTML carduri găsite: ${htmlList.length}`,
+    `HTML în jurul primului produs: ${htmlAroundFirstProduct(html, products[0])}`,
+  ];
+  return { products, method, samples };
 }
 
 export async function scan(source: Source, q: string): Promise<ScanResult> {
@@ -105,8 +110,8 @@ export async function scan(source: Source, q: string): Promise<ScanResult> {
     }
     base.debug!.push(`${via}: HTTP ${p.status}, ${Math.round(p.html.length / 1024)} KB, titlu „${pageTitle(p.html)}”`);
     // Încercăm întâi extragerea: paginile normale pot conține cuvântul „recaptcha” fără să fie blocate.
-    const { products, method } = p.status < 400 ? extractProducts(source, p.html) : { products: [], method: undefined };
-    if (products.length) return { ...base, ok: true, products: products.slice(0, 60), method, via };
+    const { products, method, samples } = p.status < 400 ? extractProducts(source, p.html) : { products: [], method: undefined, samples: [] };
+    if (products.length) return { ...base, ok: true, products: products.slice(0, 60), method, via, samples };
     lastError = looksBlocked(p.status, p.html)
       ?? "Pagina s-a încărcat, dar nu am găsit produse în ea (structura site-ului s-a schimbat sau căutarea nu are rezultate).";
   }

@@ -100,6 +100,8 @@ export default function LiveScan({ initialQuery, trigger, onUsePrice }: { initia
         <p className="footnote" style={{ alignSelf: "end" }}>Scanează același cuvânt din nou după câteva zile: aplicația compară recenziile și afișează creșterea reală.</p>
       </div>}
 
+      {rows.length > 0 && rows.filter(p => p.price === undefined).length > rows.length / 2 && <Diagnostic result={result} />}
+
       <div className="scanlist">
         {rows.map(p => <ScanRow key={`${p.id}-${p.position}`} p={p} trend={trends[p.id]} onUsePrice={onUsePrice} />)}
       </div>
@@ -124,4 +126,18 @@ function ScanRow({ p, trend, onUsePrice }: { p: ScannedProduct & { sales?: numbe
     </div>
     {p.price !== undefined && <button className="secondary scancalc" onClick={() => onUsePrice(p.price!)} title="Calculează profitul la acest preț"><Calculator size={14} /></button>}
   </article>;
+}
+
+function Diagnostic({ result }: { result: ScanResult }) {
+  const text = JSON.stringify({ debug: result.debug, samples: result.samples, first: result.products.slice(0, 2) }, null, 1).slice(0, 12000);
+  const [copied, setCopied] = useState(false);
+  return <div className="panel scanerror">
+    <AlertTriangle size={18} />
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <strong>Unele date (preț, recenzii) nu au putut fi citite.</strong>
+      <p>Apasă „Copiază diagnosticul” și lipește textul în chat, ca să ajustez citirea paginii.</p>
+      <button className="secondary" onClick={async () => { try { await navigator.clipboard.writeText(text); setCopied(true); } catch { setCopied(false); } }}>{copied ? "Copiat ✓" : "Copiază diagnosticul"}</button>
+      <details style={{ marginTop: 8 }}><summary className="footnote">Vezi textul</summary><textarea readOnly value={text} style={{ width: "100%", height: 160, fontSize: 10 }} /></details>
+    </div>
+  </div>;
 }
