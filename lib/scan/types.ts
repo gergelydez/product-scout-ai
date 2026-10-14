@@ -23,4 +23,6 @@ export type ScanResult = {
   /** Cum au fost extrase datele: JSON din pagină sau HTML */
   method?: "json" | "html";
   error?: string;
+  /** Site-ul a blocat cererea directă și nu e configurat un proxy */
+  needsProxy?: boolean;
 };

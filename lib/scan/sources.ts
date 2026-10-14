@@ -3,10 +3,38 @@ import { looksBlocked, parseNumber, productsFromEmbeddedJson } from "./extract";
 import type { ScannedProduct, ScanResult, Source } from "./types";
 
 const HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36",
-  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "ro-RO,ro;q=0.9,en;q=0.7",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Cache-Control": "no-cache",
+  "Sec-Ch-Ua": '"Chromium";v="129", "Not=A?Brand";v="8", "Google Chrome";v="129"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
 };
+
+const siteName = (s: Source) => (s === "emag" ? "eMAG" : "Trendyol");
+
+type Page = { status: number; html: string };
+
+async function fetchDirect(url: string): Promise<Page> {
+  const res = await fetch(url, { headers: HEADERS, cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(15000) });
+  return { status: res.status, html: await res.text() };
+}
+
+/** Prin ScraperAPI (IP-uri rezidențiale), dacă SCRAPERAPI_KEY e setat în Vercel. */
+async function fetchViaScraperApi(url: string, key: string, premium: boolean): Promise<Page> {
+  const api = new URL("https://api.scraperapi.com/");
+  api.searchParams.set("api_key", key);
+  api.searchParams.set("url", url);
+  if (premium) api.searchParams.set("premium", "true");
+  const res = await fetch(api, { cache: "no-store", signal: AbortSignal.timeout(60000) });
+  return { status: res.status, html: await res.text() };
+}
 
 export function searchUrl(source: Source, q: string): string {
   return source === "emag"
@@ -48,15 +76,28 @@ export function parseEmagHtml(html: string): ScannedProduct[] {
 export async function scan(source: Source, q: string): Promise<ScanResult> {
   const url = searchUrl(source, q);
   const base: ScanResult = { ok: false, source, query: q, searchUrl: url, fetchedAt: new Date().toISOString(), products: [] };
-  let res: Response;
-  try {
-    res = await fetch(url, { headers: HEADERS, cache: "no-store", redirect: "follow", signal: AbortSignal.timeout(15000) });
-  } catch (e) {
-    return { ...base, error: `Nu am putut contacta ${source === "emag" ? "eMAG" : "Trendyol"}: ${(e as Error).message}` };
+  const key = process.env.SCRAPERAPI_KEY?.trim();
+  const attempts: (() => Promise<Page>)[] = [() => fetchDirect(url)];
+  if (key) attempts.push(() => fetchViaScraperApi(url, key, false), () => fetchViaScraperApi(url, key, true));
+
+  let page: Page | undefined, lastError = "";
+  for (const attempt of attempts) {
+    try {
+      const p = await attempt();
+      const blocked = looksBlocked(p.status, p.html);
+      if (!blocked) { page = p; break; }
+      lastError = blocked;
+    } catch (e) {
+      lastError = `Nu am putut contacta ${siteName(source)}: ${(e as Error).message}`;
+    }
   }
-  const html = await res.text();
-  const blocked = looksBlocked(res.status, html);
-  if (blocked) return { ...base, error: blocked };
+  if (!page) {
+    const hint = key
+      ? " Nici prin ScraperAPI nu a mers; verifică creditele rămase în contul ScraperAPI."
+      : " Serverul aplicației este blocat de protecția anti-roboți. Soluția: adaugă o cheie ScraperAPI (SCRAPERAPI_KEY) în setările Vercel.";
+    return { ...base, error: `${siteName(source)}: ${lastError}${hint}`, needsProxy: !key };
+  }
+  const html = page.html;
 
   const siteBase = source === "emag" ? "https://www.emag.ro" : "https://www.trendyol.com/ro";
   let products = productsFromEmbeddedJson(html, siteBase, source === "trendyol" ? "https://cdn.dsmcdn.com" : siteBase);

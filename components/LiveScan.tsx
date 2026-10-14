@@ -70,7 +70,7 @@ export default function LiveScan({ initialQuery, trigger, onUsePrice }: { initia
       <p className="footnote" style={{ margin: "10px 0 0" }}>Citește în timp real prima pagină de rezultate (până la 60 de produse): preț, rating, recenzii, vânzător. Vânzările sunt <b>estimări</b> din numărul de recenzii.</p>
     </div>
 
-    {result && !result.ok && <div className="panel scanerror"><AlertTriangle size={18} /><div><strong>Scanarea nu a reușit.</strong><p>{result.error}</p>{result.searchUrl && <a className="secondary" href={result.searchUrl} target="_blank" rel="noreferrer">Deschide căutarea pe site <ExternalLink size={12} /></a>}</div></div>}
+    {result && !result.ok && <div className="panel scanerror"><AlertTriangle size={18} /><div><strong>Scanarea nu a reușit.</strong><p>{result.error}</p>{result.needsProxy && <p className="footnote">Pași: creează cont gratuit pe scraperapi.com → copiază „API Key” → în Vercel: Project → Settings → Environment Variables → nume <b>SCRAPERAPI_KEY</b>, valoare cheia → Save → Deployments → Redeploy.{result.source === "emag" && " Între timp poți încerca Trendyol RO din meniul de lângă căutare."}</p>}{result.searchUrl && <a className="secondary" href={result.searchUrl} target="_blank" rel="noreferrer">Deschide căutarea pe site <ExternalLink size={12} /></a>}</div></div>}
 
     {result?.ok && <>
       <div className="metrics">

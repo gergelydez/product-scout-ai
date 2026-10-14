@@ -41,3 +41,11 @@ Poți publica pe un plan gratuit compatibil cu Next.js (de ex. Vercel, în limit
 3. Stochează observații cu timestamp, URL, câmpuri colectate și proveniență.
 4. Separă câmpurile observate de cele estimate.
 5. Calibrează scorurile doar după ce avem date istorice și rezultate reale.
+
+## Dacă scanarea dă „HTTP 403” (blocat)
+eMAG/Trendyol pot bloca serverele de hosting (de ex. Vercel). Aplicația poate trece prin [ScraperAPI](https://www.scraperapi.com/), care folosește IP-uri rezidențiale:
+1. Creează un cont pe scraperapi.com și copiază **API Key** din dashboard.
+2. În Vercel: proiectul → **Settings → Environment Variables** → adaugă `SCRAPERAPI_KEY` cu valoarea cheii → Save.
+3. **Deployments** → ultimul deployment → **Redeploy**.
+
+Aplicația încearcă întâi direct (gratuit); doar dacă e blocată folosește ScraperAPI, apoi, dacă tot e blocată, varianta premium a ScraperAPI (consumă mai multe credite).
