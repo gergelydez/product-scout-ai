@@ -16,6 +16,8 @@
 export type CalcSettings = {
   aliCommissionPct: number;
   shippingUsdPerKg: number;
+  /** Transport maritim China→RO, USD/kg (pentru comparație) */
+  seaUsdPerKg: number;
   customsPct: number;
   vatPct: number;
   /** Include transportul în valoarea în vamă (pe DVI se declară de obicei doar factura) */
@@ -30,6 +32,7 @@ export type CalcSettings = {
 export const DEFAULT_CALC: CalcSettings = {
   aliCommissionPct: 3,
   shippingUsdPerKg: 10,
+  seaUsdPerKg: 2,
   customsPct: 5,
   vatPct: 21,
   shippingInCustoms: false,

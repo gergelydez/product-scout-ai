@@ -58,3 +58,11 @@ Tabul **„Amazon → eMAG”** găsește oportunități fără să scrii cuvint
 4. Rezultatele rămân salvate în browser, ca să nu consumi credite de două ori.
 
 Opțional, pentru cuvinte-cheie mai bune: adaugă în Vercel variabila `ANTHROPIC_API_KEY` (cheie de la console.anthropic.com). Fără ea se folosește Google Translate (gratuit), cu rezultate mai brute.
+
+## Produsele mele (registru de produse, salvat în cloud)
+Tabul **„Produsele mele”** păstrează ideile de produse (inclusiv cele găsite pe bloguri), cu statusuri (Idee → În analiză → Mostră comandată → Listat pe eMAG / Respins), profit net calculat la cursul BNR pentru transport cu avionul și maritim, comision eMAG pe categorie, taxă vamală pe cod HS, preț minim de intrare și verificare pe eMAG cu un buton. Din „Amazon → eMAG” și „Scanare live” poți salva produse cu **„+ Listă”**. Export/Import JSON pentru copii de siguranță.
+
+Lista se salvează mereu pe dispozitiv. Ca să fie salvată și pe server (și să o vezi pe orice telefon/calculator):
+1. Vercel → proiectul → **Storage** (sau **Marketplace**) → **Upstash for Redis** → Create (plan gratuit) → conectează-l la proiect. Vercel adaugă singur `KV_REST_API_URL` și `KV_REST_API_TOKEN`.
+2. Opțional, pune o parolă: variabila `APP_PASSWORD` (fără ea, oricine are linkul aplicației poate vedea lista).
+3. Redeploy. În tab apare „Salvat în cloud”.

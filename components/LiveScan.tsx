@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, Loader2, ExternalLink, Download, Calculator, TrendingUp, AlertTriangle, SlidersHorizontal } from "lucide-react";
 import type { ScanResult, ScannedProduct, Source } from "@/lib/scan/types";
 import CopyDiag from "./CopyDiag";
+import { productsStore } from "@/lib/products/useProducts";
 import { DEFAULT_SETTINGS, estimateMonthlySales, recordAndCompare, summarize, type EstimateSettings, type Trend } from "@/lib/scan/metrics";
 
 const lei = (n?: number) => n === undefined ? "–" : new Intl.NumberFormat("ro-RO", { style: "currency", currency: "RON", maximumFractionDigits: 0 }).format(n);
@@ -40,6 +41,18 @@ export default function LiveScan({ initialQuery, trigger, onCalc }: { initialQue
   }, [trigger]);
 
   const [fbeFilter, setFbeFilter] = useState<"toate" | "fbe" | "fbm">("toate");
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  function saveToList(p: Row) {
+    const { duplicate } = productsStore.addIdea({
+      name: p.title, keyword: result?.queryUsed ?? result?.query, status: "idee",
+      priceRon: p.price ?? null, emagLink: result?.source === "emag" ? p.url : undefined,
+      competitorLink: result?.source === "trendyol" ? p.url : undefined,
+      priceSource: result?.source, emagResults: result?.source === "emag" ? (result?.totalResults ?? null) : null,
+      note: `Din scanarea ${result?.source === "emag" ? "eMAG" : "Trendyol"} „${result?.query}”: poziția ${p.position}${p.reviews !== undefined ? `, ${p.reviews} recenzii` : ""}${p.rating ? `, rating ${p.rating}` : ""}${p.seller ? `, vânzător ${p.seller}` : ""}.`,
+    });
+    setSavedIds(x => new Set(x).add(`${p.id}-${p.position}`));
+    if (duplicate) alert("Produsul e deja în „Produsele mele”.");
+  }
   const [view, setView] = useState<"tabel" | "carduri">("tabel");
   const [dir, setDir] = useState<1 | -1>(1);
 
@@ -163,7 +176,7 @@ export default function LiveScan({ initialQuery, trigger, onCalc }: { initialQue
               <td className="num">{p.rating ? <><span className="star">★</span> {num(p.rating, 1)}</> : "–"}</td>
               <td className="num">{num(p.reviews)}{t?.reviewDelta ? <span className="trend" title={`în ${num(t.days, 1)} zile`}>+{t.reviewDelta}</span> : null}</td>
               <td><a href={alibabaUrl(p.title)} target="_blank" rel="noreferrer">Vezi</a></td>
-              <td>{p.price !== undefined ? <button className="calcbtn" onClick={() => openCalc(p)}>Calculator <Calculator size={12} /></button> : "–"}</td>
+              <td><div style={{ display: "flex", gap: 6 }}>{p.price !== undefined ? <button className="calcbtn" onClick={() => openCalc(p)}>Calculator <Calculator size={12} /></button> : "–"}<button className="secondary" disabled={savedIds.has(`${p.id}-${p.position}`)} onClick={() => saveToList(p)}>{savedIds.has(`${p.id}-${p.position}`) ? "Salvat ✓" : "+ Listă"}</button></div></td>
             </tr>;
           })}</tbody>
         </table></div>

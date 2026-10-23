@@ -11,6 +11,7 @@ import { calculate, sale } from "@/lib/importCalc";
 import { useCalcSettings, useFx } from "@/lib/useShared";
 import { FxBadge, type CalcPreset } from "./ImportCalculator";
 import CopyDiag from "./CopyDiag";
+import { productsStore } from "@/lib/products/useProducts";
 import type { ScanResult } from "@/lib/scan/types";
 import { alibabaUrl } from "./LiveScan";
 
@@ -43,6 +44,7 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
   const [onlyFit, setOnlyFit] = useState(true);
   const [trendMode, setTrendMode] = useState(false);
   const [sweepIssues, setSweepIssues] = useState<{ failed: string[]; debug: string[] } | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
 
   const cacheKey = trendMode ? `trend|${market}` : customUrl.trim() ? `url:${customUrl.trim()}` : `${market}|${list}|${category}`;
 
@@ -263,7 +265,18 @@ export default function AmazonFinder({ onOpenScan, onCalc }: { onOpenScan: (keyw
             <td className={`num ${calc?.at ? (calc.at.netProfit > 0 ? "pos" : "neg") : ""}`}>{calc?.at ? <>{lei(calc.at.netProfit)}<s style={{ textDecoration: "none" }}>{calc.at.marginPct.toFixed(0)}% marjă</s></> : "–"}</td>
             <td className={`num ${atMin ? (atMin.netProfit > 0 ? "pos" : "neg") : ""}`}>{atMin ? <>{lei(atMin.netProfit)}<s style={{ textDecoration: "none" }}>la {lei(valid?.minPrice)}</s></> : "–"}</td>
             <td className="reasons">{opp.reasons.join(" · ")}</td>
-            <td><div style={{ display: "flex", gap: 6 }}><button className="calcbtn" onClick={() => onOpenScan(keyword)}>Scan eMAG</button><button className="secondary" onClick={() => onCalc({ title: keyword, salePrice: valid?.medianPrice, minPrice: valid?.minPrice, medianPrice: valid?.medianPrice, aliUsd, kg })}>Calculator</button><a className="secondary" href={alibabaUrl(p.title)} target="_blank" rel="noreferrer">Alibaba</a></div></td>
+            <td><div style={{ display: "flex", gap: 6 }}><button className="calcbtn" onClick={() => onOpenScan(keyword)}>Scan eMAG</button><button className="secondary" disabled={savedIds.has(p.asin)} onClick={() => {
+              const { duplicate } = productsStore.addIdea({
+                name: p.title, keyword, status: "idee", category: category ?? undefined,
+                costUsd: aliUsd ?? null, weightKg: kg ?? null, priceRon: valid?.medianPrice ?? null,
+                competitorLink: p.url, priceSource: valid?.medianPrice ? "median eMAG" : undefined,
+                emagResults: valid?.totalResults ?? null,
+                emagCheck: valid?.ok ? { at: valid.checkedAt, total: valid.totalResults, found: valid.found, medianPrice: valid.medianPrice, minPrice: valid.minPrice, avgReviewsTop10: valid.avgReviewsTop10 } : null,
+                note: `Din ${MARKETS[data?.market ?? market].label}: #${p.rank}${p.rankChangePct ? `, +${p.rankChangePct}% în clasament` : ""}${p.reviews ? `, ${p.reviews} recenzii` : ""}${p.price ? `, preț ${p.price}` : ""}. Scor oportunitate ${opp.score}.`,
+              });
+              setSavedIds(x => new Set(x).add(p.asin));
+              if (duplicate) alert("Produsul e deja în „Produsele mele”.");
+            }}>{savedIds.has(p.asin) ? "Salvat ✓" : "+ Listă"}</button><button className="secondary" onClick={() => onCalc({ title: keyword, salePrice: valid?.medianPrice, minPrice: valid?.minPrice, medianPrice: valid?.medianPrice, aliUsd, kg })}>Calculator</button><a className="secondary" href={alibabaUrl(p.title)} target="_blank" rel="noreferrer">Alibaba</a></div></td>
           </tr>;
         })}</tbody>
       </table></div>

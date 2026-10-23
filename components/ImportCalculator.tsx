@@ -25,6 +25,7 @@ export function SettingsEditor() {
   return <div className="calcsettings">
     {field("aliCommissionPct", "Comision Alibaba %", 0.5)}
     {field("shippingUsdPerKg", "Transport avion USD/kg", 0.5)}
+    {field("seaUsdPerKg", "Transport maritim USD/kg", 0.5)}
     {field("customsPct", "Taxe vamale %", 0.5)}
     {field("vatPct", "TVA %")}
     {field("emagCommissionPct", "Comision eMAG % (din preț cu TVA)", 0.5)}
