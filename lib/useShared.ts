@@ -6,12 +6,24 @@ import { DEFAULT_CALC, type CalcSettings } from "./importCalc";
 
 let fxPromise: Promise<FxRates | undefined> | undefined;
 
+const fxListeners = new Set<(r: FxRates) => void>();
+
+/** Citește din nou cursul de pe server și actualizează toate ecranele. */
+export async function refreshFx(): Promise<FxRates | undefined> {
+  fxPromise = fetch(`/api/fx?t=${Date.now()}`, { cache: "no-store" }).then(r => (r.ok ? r.json() : undefined)).catch(() => undefined);
+  const r = await fxPromise;
+  if (r) fxListeners.forEach(l => l(r));
+  return r;
+}
+
 /** Cursul BNR live (cache în memorie pentru sesiune; serverul îl reîmprospătează la 30 min). */
 export function useFx(): FxRates | undefined {
   const [fx, setFx] = useState<FxRates>();
   useEffect(() => {
     fxPromise ??= fetch("/api/fx").then(r => (r.ok ? r.json() : undefined)).catch(() => undefined);
     fxPromise.then(r => { if (r) setFx(r); else fxPromise = undefined; });
+    fxListeners.add(setFx);
+    return () => { fxListeners.delete(setFx); };
   }, []);
   return fx;
 }

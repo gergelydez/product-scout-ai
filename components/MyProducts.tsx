@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Plus, Search, Download, Upload, Cloud, CloudOff, Loader2, ExternalLink, ScanSearch, Calculator, Pencil, Trash2, ChevronDown, Lock } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Search, RefreshCw, X, SlidersHorizontal, Download, Upload, Cloud, CloudOff, Loader2, ExternalLink, ScanSearch, Calculator, Pencil, Trash2, ChevronDown, Lock } from "lucide-react";
 import { calcProduct } from "@/lib/products/calc";
 import { STATUSES, type Product, type Status } from "@/lib/products/types";
 import { productsStore, useProducts } from "@/lib/products/useProducts";
-import { useCalcSettings, useFx } from "@/lib/useShared";
+import { refreshFx, useCalcSettings, useFx } from "@/lib/useShared";
+import type { CalcSettings } from "@/lib/importCalc";
 import { emagCheckFrom } from "@/lib/opportunity";
 import type { ScanResult } from "@/lib/scan/types";
 import { FxBadge, type CalcPreset } from "./ImportCalculator";
@@ -15,6 +16,15 @@ const lei = (n?: number, d = 0) => (n === undefined || !Number.isFinite(n) ? "�
 const num = (n?: number | null, d = 0) => (n === undefined || n === null || !Number.isFinite(n) ? "–" : new Intl.NumberFormat("ro-RO", { maximumFractionDigits: d }).format(n));
 const statusLabel = (s: Status) => STATUSES.find(x => x.id === s)?.label ?? s;
 
+type Filter = Status | "" | "active" | "profitable";
+
+function filterLabel(f: Filter): string {
+  if (f === "") return "toate statusurile";
+  if (f === "active") return "active (fără respinse)";
+  if (f === "profitable") return "doar profitabile";
+  return STATUSES.find(s => s.id === f)?.label ?? f;
+}
+
 type SortKey = "profit" | "profitSea" | "margin" | "roi" | "price" | "cost" | "breakEven" | "emag" | "new" | "name";
 
 export default function MyProducts({ onOpenScan, onCalc }: { onOpenScan: (keyword: string) => void; onCalc: (p: Omit<CalcPreset, "key">) => void }) {
@@ -22,7 +32,18 @@ export default function MyProducts({ onOpenScan, onCalc }: { onOpenScan: (keywor
   const fx = useFx();
   const [settings] = useCalcSettings();
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<Status | "" | "active">("active");
+  const [status, setStatus] = useState<Filter>("active");
+  const [editCosts, setEditCosts] = useState<string | null>(null);
+  // ordinea listei rămâne fixă cât timp editezi un card (altfel s-ar muta la fiecare cifră tastată)
+  const frozen = useRef<string[] | null>(null);
+  const [recalcAt, setRecalcAt] = useState<number>(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  const firstRender = useRef(true);
+  // după schimbarea filtrului/sortării, sărim la listă ca schimbarea să fie vizibilă pe telefon
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [status]);
   const [sort, setSort] = useState<SortKey>("profit");
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [checking, setChecking] = useState<string | null>(null);
@@ -32,10 +53,15 @@ export default function MyProducts({ onOpenScan, onCalc }: { onOpenScan: (keywor
   const rows = useMemo(() => {
     const term = q.trim().toLowerCase();
     return products
-      .filter(p => status === "" || (status === "active" ? p.status !== "respins" : p.status === status))
+      .filter(p => status === "" || status === "profitable" || (status === "active" ? p.status !== "respins" : p.status === status))
       .filter(p => !term || [p.name, p.category, p.keyword, p.note].some(x => x?.toLowerCase().includes(term)))
       .map(p => ({ p, c: calcProduct(p, settings, fx?.USD) }))
+      .filter(r => status !== "profitable" || (r.p.status !== "respins" && (r.c.air?.at?.netProfit ?? 0) > 0))
       .sort((a, b) => {
+        if (frozen.current) {
+          const ia = frozen.current.indexOf(a.p.id), ib = frozen.current.indexOf(b.p.id);
+          return (ia < 0 ? -1 : ia) - (ib < 0 ? -1 : ib);
+        }
         const v = (r: typeof a): number | string => {
           switch (sort) {
             case "profit": return r.c.air?.at?.netProfit ?? -1e9;
@@ -53,7 +79,8 @@ export default function MyProducts({ onOpenScan, onCalc }: { onOpenScan: (keywor
         const x = v(a), y = v(b);
         return typeof x === "string" ? (sort === "name" ? x.localeCompare(String(y)) : String(y).localeCompare(x)) : (y as number) - x;
       });
-  }, [products, q, status, sort, settings, fx]);
+  }, [products, q, status, sort, settings, fx, recalcAt, editCosts]);
+  useEffect(() => { if (!editCosts) frozen.current = null; }, [editCosts]);
 
   const summary = useMemo(() => {
     const calcs = products.filter(p => p.status !== "respins").map(p => calcProduct(p, settings, fx?.USD));
@@ -113,17 +140,18 @@ export default function MyProducts({ onOpenScan, onCalc }: { onOpenScan: (keywor
     {sync.kind === "password" && <PasswordBox />}
 
     <div className="mpsummary">
-      <div><b>{summary.total}</b><span>produse</span></div>
-      {STATUSES.map(s => <div key={s.id} className={`st-${s.id}`}><b>{summary.byStatus[s.id]}</b><span>{s.label}</span></div>)}
-      <div className="good"><b>{summary.profitable}</b><span>profitabile (avion)</span></div>
-      <div><b>{lei(summary.avgProfit)}</b><span>profit mediu / buc</span></div>
+      <button className={status === "" ? "on" : ""} onClick={() => setStatus("")}><b>{summary.total}</b><span>toate produsele</span></button>
+      {STATUSES.map(s => <button key={s.id} className={`st-${s.id} ${status === s.id ? "on" : ""}`} onClick={() => setStatus(s.id)}><b>{summary.byStatus[s.id]}</b><span>{s.label}</span></button>)}
+      <button className={`good ${status === "profitable" ? "on" : ""}`} onClick={() => setStatus("profitable")}><b>{summary.profitable}</b><span>profitabile (avion)</span></button>
+      <button className={status === "active" ? "on" : ""} onClick={() => setStatus("active")}><b>{lei(summary.avgProfit)}</b><span>profit mediu · active</span></button>
     </div>
 
     <div className="mpbar">
       <label className="mpsearch"><Search size={15} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Caută după nume, categorie, notă" aria-label="Caută" /></label>
-      <select value={status} onChange={e => setStatus(e.target.value as Status | "" | "active")} aria-label="Status">
+      <select value={status} onChange={e => setStatus(e.target.value as Filter)} aria-label="Filtru status">
         <option value="active">Active (fără respinse)</option>
         <option value="">Toate statusurile</option>
+        <option value="profitable">Doar profitabile (avion)</option>
         {STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
       </select>
       <select value={sort} onChange={e => setSort(e.target.value as SortKey)} aria-label="Sortează">
@@ -141,12 +169,20 @@ export default function MyProducts({ onOpenScan, onCalc }: { onOpenScan: (keywor
     </div>
     <div className="mptools">
       <FxBadge />
-      <span className="mpsettings">transport {settings.shippingUsdPerKg} $/kg avion · {settings.seaUsdPerKg} $/kg maritim · comision implicit {settings.emagCommissionPct}% · alte costuri {settings.otherCostLei} lei</span>
+      <button className="mpbtn primary" onClick={async () => { await refreshFx(); setRecalcAt(Date.now()); }}><RefreshCw size={14} /> Recalculează</button>
+      {recalcAt > 0 && <span className="mpsettings">Recalculat la {new Date(recalcAt).toLocaleTimeString("ro-RO")} ✓</span>}
       <div className="mptoolbtns">
         <button className="mpbtn" onClick={exportJson}><Download size={14} /> Export</button>
         <button className="mpbtn" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import JSON</button>
         <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={e => { const f = e.target.files?.[0]; if (f) importJson(f); e.target.value = ""; }} />
       </div>
+    </div>
+
+    <QuickCosts />
+
+    <div className="mpresult" ref={listRef}>
+      <span>Afișez <b>{rows.length}</b> din {products.length} produse · {filterLabel(status)}{q ? ` · „${q}”` : ""}</span>
+      {(status !== "active" || q) && <button className="mpbtn" onClick={() => { setStatus("active"); setQ(""); }}><X size={12} /> Resetează</button>}
     </div>
 
     <div className="mplist">
@@ -177,6 +213,9 @@ export default function MyProducts({ onOpenScan, onCalc }: { onOpenScan: (keywor
             <div><span>Preț minim (avion)</span><b>{lei(c.air?.breakEvenPrice)}</b></div>
             <div><span>Comision eMAG</span><b>{c.fee.pct}% <em className="mpfeetag">{c.fee.source}</em></b></div>
           </div>
+          {editCosts === p.id
+            ? <InlineCosts p={p} defaults={settings} onDone={() => { frozen.current = null; setEditCosts(null); }} />
+            : <button className="mpedit" onClick={() => { frozen.current = rows.map(r => r.p.id); setEditCosts(p.id); }}><Pencil size={12} /> Editează costuri și prețuri</button>}
           {c.missing.length > 0 && <div className="mpwarn">Lipsește: {c.missing.join(", ")}</div>}
           {p.emagCheck?.minPrice !== undefined && c.air && c.air.breakEvenPrice > p.emagCheck.minPrice && <div className="mpwarn">Cel mai mic preț pe eMAG ({lei(p.emagCheck.minPrice)}) e sub prețul tău minim ({lei(c.air.breakEvenPrice)}).</div>}
           <span className={`mpver ${p.pricesVerified ? "ok" : "est"}`}>{p.pricesVerified ? "Prețuri verificate" : "Prețuri estimate"}</span>
@@ -296,3 +335,53 @@ function EditSheet({ product, onClose }: { product: Product | null; onClose: () 
 }
 
 export { statusLabel };
+
+/** Câmp numeric care salvează la fiecare modificare (calculul se reface imediat). */
+function NumField({ label, value, step, suffix, placeholder, onChange }: { label: string; value: number | null | undefined; step: string; suffix?: string; placeholder?: string; onChange: (v: number | null) => void }) {
+  const [text, setText] = useState(value === null || value === undefined ? "" : String(value));
+  useEffect(() => { setText(value === null || value === undefined ? "" : String(value)); }, [value]);
+  return <label className="mpnum">
+    <span>{label}</span>
+    <div><input type="number" inputMode="decimal" step={step} value={text} placeholder={placeholder}
+      onChange={e => { setText(e.target.value); const v = e.target.value.replace(",", "."); onChange(v === "" ? null : Number(v)); }} />{suffix && <em>{suffix}</em>}</div>
+  </label>;
+}
+
+function InlineCosts({ p, defaults, onDone }: { p: Product; defaults: CalcSettings; onDone: () => void }) {
+  const set = (patch: Partial<Product>) => productsStore.upsert({ ...p, ...patch });
+  return <div className="mpinline">
+    <NumField label="Cost Alibaba" suffix="$" step="0.01" value={p.costUsd} onChange={v => set({ costUsd: v })} />
+    <NumField label="Greutate" suffix="kg" step="0.05" value={p.weightKg} onChange={v => set({ weightKg: v })} />
+    <NumField label="Preț eMAG" suffix="lei" step="1" value={p.priceRon} onChange={v => set({ priceRon: v })} />
+    <NumField label="Comision eMAG" suffix="%" step="0.5" value={p.feeOverride} placeholder="categorie" onChange={v => set({ feeOverride: v })} />
+    <NumField label="Taxă vamală" suffix="%" step="0.1" value={p.dutyPct} placeholder={String(defaults.customsPct)} onChange={v => set({ dutyPct: v })} />
+    <NumField label="Alte costuri/buc" suffix="lei" step="0.5" value={p.shipRon} placeholder="0" onChange={v => set({ shipRon: v })} />
+    <button className="mpbtn primary" onClick={onDone}>Gata</button>
+  </div>;
+}
+
+/** Costurile generale, comune pentru toată aplicația (Produsele mele, Amazon → eMAG, Calculator). */
+function QuickCosts() {
+  const [s, setS] = useCalcSettings();
+  const [open, setOpen] = useState(false);
+  const set = (k: keyof CalcSettings) => (v: number | null) => setS({ ...s, [k]: v ?? 0 });
+  return <div className="mpquick">
+    <button className="mpquickhead" onClick={() => setOpen(o => !o)}>
+      <SlidersHorizontal size={14} />
+      <span>Transport <b>{s.shippingUsdPerKg} $/kg</b> avion · <b>{s.seaUsdPerKg} $/kg</b> maritim · comision implicit <b>{s.emagCommissionPct}%</b> · alte costuri <b>{s.otherCostLei} lei</b></span>
+      <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : undefined, marginLeft: "auto" }} />
+    </button>
+    {open && <div className="mpinline">
+      <NumField label="Transport avion" suffix="$/kg" step="0.5" value={s.shippingUsdPerKg} onChange={set("shippingUsdPerKg")} />
+      <NumField label="Transport maritim" suffix="$/kg" step="0.5" value={s.seaUsdPerKg} onChange={set("seaUsdPerKg")} />
+      <NumField label="Comision Alibaba" suffix="%" step="0.5" value={s.aliCommissionPct} onChange={set("aliCommissionPct")} />
+      <NumField label="Taxă vamală implicită" suffix="%" step="0.5" value={s.customsPct} onChange={set("customsPct")} />
+      <NumField label="Comision eMAG implicit" suffix="%" step="0.5" value={s.emagCommissionPct} onChange={set("emagCommissionPct")} />
+      <NumField label="Livrare/ambalaj/buc" suffix="lei" step="1" value={s.otherCostLei} onChange={set("otherCostLei")} />
+      <NumField label="TVA" suffix="%" step="1" value={s.vatPct} onChange={set("vatPct")} />
+      <NumField label="Impozit pe profit" suffix="%" step="1" value={s.profitTaxPct} onChange={set("profitTaxPct")} />
+      <NumField label="Marjă țintă" suffix="%" step="1" value={s.targetMarginPct} onChange={set("targetMarginPct")} />
+      <p className="mpsettings" style={{ gridColumn: "1/-1", margin: 0 }}>Se aplică imediat peste tot: Produsele mele, Amazon → eMAG și Calculator. Valorile puse pe un produs (taxă vamală, comision) au prioritate.</p>
+    </div>}
+  </div>;
+}
